@@ -16,27 +16,30 @@ return [
     */
 
     'paths' => [
-        'api/*', 
-        'login', 
-        'logout', 
+        'api/v1/*', 
+        'api/health',
         'sanctum/csrf-cookie'
     ],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
-        'http://localhost:*',
-        'http://127.0.0.1:*',
-        'exp://*', // Expo development
-        'capacitor://*', // Capacitor apps
-        env('FRONTEND_URL', 'http://localhost:3000'),
-    ],
+    'allowed_origins' => env('APP_ENV') === 'production' 
+        ? [env('FRONTEND_URL', 'https://app.rehome.app')] 
+        : [
+            'http://localhost:3000',
+            'http://localhost:5173',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:5173',
+            env('FRONTEND_URL', 'http://localhost:3000'),
+        ],
 
-    'allowed_origins_patterns' => [
-        '/^http:\/\/localhost:\d+$/',
-        '/^http:\/\/127\.0\.0\.1:\d+$/',
-        '/^exp:\/\/.*$/',
-    ],
+    'allowed_origins_patterns' => env('APP_ENV') === 'production' 
+        ? []
+        : [
+            '/^http:\/\/localhost:\d+$/',
+            '/^http:\/\/127\.0\.0\.1:\d+$/',
+            '/^exp:\/\/.*$/', // Expo development only in dev
+        ],
 
     'allowed_headers' => ['*'],
 

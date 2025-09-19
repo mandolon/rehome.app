@@ -1,6 +1,6 @@
 # Rehome.app
 
-A modern, API-first platform for pet rehoming and adoption, built with Laravel and React, designed to be iOS-ready from day one.
+A modern, API-first preconstruction platform focusing on design, permit, and building workflows. Built with Laravel and React, designed to be iOS-ready from day one.
 
 ## 🏗️ Architecture Overview
 

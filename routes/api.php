@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| API Routes
+| API Routes - Version 1
 |--------------------------------------------------------------------------
 |
 | Here is where you can register API routes for your application. These
@@ -19,30 +19,6 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// Public authentication routes
-Route::middleware('throttle:auth')->group(function () {
-    Route::post('/login', [AuthApiController::class, 'login']);
-});
-
-// Protected routes requiring authentication
-Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
-    // Auth management
-    Route::get('/me', [AuthApiController::class, 'me']);
-    Route::post('/logout', [AuthApiController::class, 'logout']);
-
-    // Projects CRUD
-    Route::apiResource('projects', ProjectApiController::class);
-    
-    // Project-specific endpoints
-    Route::post('/projects/{project}/ask', [ChatApiController::class, 'ask']);
-    Route::post('/projects/{project}/docs', [DocApiController::class, 'store']);
-    
-    // File management with signed URLs
-    Route::get('/files/{file}', [FileApiController::class, 'show']);
-    Route::get('/files/{file}/download', [FileApiController::class, 'download'])
-         ->name('api.files.download');
-});
-
 // Health check endpoint (public)
 Route::get('/health', function () {
     return response()->json([
@@ -50,4 +26,31 @@ Route::get('/health', function () {
         'timestamp' => now()->toISOString(),
         'version' => '1.0.0',
     ]);
+});
+
+// API Version 1
+Route::prefix('v1')->group(function () {
+    // Public authentication routes
+    Route::middleware('throttle:auth')->group(function () {
+        Route::post('/login', [AuthApiController::class, 'login']);
+    });
+
+    // Protected routes requiring authentication
+    Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
+        // Auth management
+        Route::get('/me', [AuthApiController::class, 'me']);
+        Route::post('/logout', [AuthApiController::class, 'logout']);
+
+        // Projects CRUD
+        Route::apiResource('projects', ProjectApiController::class);
+        
+        // Project-specific endpoints
+        Route::post('/projects/{project}/ask', [ChatApiController::class, 'ask']);
+        Route::post('/projects/{project}/docs', [DocApiController::class, 'store']);
+        
+        // File management with signed URLs
+        Route::get('/files/{file}', [FileApiController::class, 'show']);
+        Route::get('/files/{file}/download', [FileApiController::class, 'download'])
+             ->name('api.files.download');
+    });
 });

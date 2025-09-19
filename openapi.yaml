@@ -2,15 +2,15 @@ openapi: 3.0.3
 info:
   title: Rehome App API
   version: 1.0.0
-  description: API-first platform for pet rehoming and adoption, designed for web and mobile
+  description: API-first preconstruction platform focusing on design, permit, and building workflows
   contact:
     name: API Support
     email: support@rehome.app
 
 servers:
-  - url: http://localhost:8000/api
+  - url: http://localhost:8000/api/v1
     description: Development server
-  - url: https://api.rehome.app
+  - url: https://api.rehome.app/v1
     description: Production server
 
 paths:
