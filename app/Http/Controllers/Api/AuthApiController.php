@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\Api;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -29,7 +30,7 @@ class AuthApiController extends Controller
 
         $token = $user->createToken($request->device_name ?: 'mobile-app')->plainTextToken;
 
-        return response()->json([
+        return Api::ok([
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -45,7 +46,7 @@ class AuthApiController extends Controller
     {
         $user = $request->user();
 
-        return response()->json([
+        return Api::ok([
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -60,8 +61,6 @@ class AuthApiController extends Controller
     {
         $request->user()->currentAccessToken()->delete();
 
-        return response()->json([
-            'message' => 'Logged out successfully',
-        ]);
+        return Api::ok([], [], 200);
     }
 }

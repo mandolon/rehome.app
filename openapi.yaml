@@ -1,0 +1,449 @@
+openapi: 3.0.3
+info:
+  title: Rehome App API
+  version: 1.0.0
+  description: API-first platform for pet rehoming and adoption, designed for web and mobile
+  contact:
+    name: API Support
+    email: support@rehome.app
+
+servers:
+  - url: http://localhost:8000/api
+    description: Development server
+  - url: https://api.rehome.app
+    description: Production server
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags: [System]
+      responses:
+        '200':
+          description: System is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  timestamp: { type: string, format: date-time }
+                  version: { type: string, example: "1.0.0" }
+
+  /login:
+    post:
+      summary: Login and get authentication token
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, example: "user@example.com" }
+                password: { type: string, example: "password123" }
+                device_name: { type: string, example: "iPhone 14" }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  token: { type: string, example: "1|abc123..." }
+        '422':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /me:
+    get:
+      summary: Get current user information
+      tags: [Authentication]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: User information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /logout:
+    post:
+      summary: Logout and revoke token
+      tags: [Authentication]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: "Logged out successfully" }
+
+  /projects:
+    get:
+      summary: List projects (role-scoped)
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: per_page
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: status
+          schema: { type: string, enum: [active, inactive, archived] }
+      responses:
+        '200':
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: 
+                    type: array
+                    items: { $ref: '#/components/schemas/Project' }
+                  meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    post:
+      summary: Create new project (admin/team only)
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "Downtown Adoption Center" }
+                description: { type: string, example: "Main adoption facility downtown" }
+                status: { type: string, enum: [active, inactive], default: active }
+      responses:
+        '201':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Project' }
+                  message: { type: string, example: "Project created successfully" }
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /projects/{id}:
+    get:
+      summary: Get project details
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Project details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ProjectDetail' }
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+    patch:
+      summary: Update project
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                status: { type: string, enum: [active, inactive, archived] }
+      responses:
+        '200':
+          description: Project updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Project' }
+                  message: { type: string, example: "Project updated successfully" }
+
+    delete:
+      summary: Delete project (admin only)
+      tags: [Projects]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Project deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: "Project deleted successfully" }
+        '403':
+          description: Forbidden - admin access required
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /projects/{id}/ask:
+    post:
+      summary: Ask question about project documents (RAG)
+      tags: [RAG]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string, example: "What are the adoption requirements?" }
+                context_limit: { type: integer, minimum: 1, maximum: 10, default: 3 }
+      responses:
+        '200':
+          description: AI-generated answer
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      answer: { type: string, example: "Based on the documents..." }
+                      sources: 
+                        type: array
+                        items: { $ref: '#/components/schemas/Source' }
+                      confidence: { type: number, format: float, example: 85.5 }
+        '500':
+          description: Processing error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /projects/{id}/docs:
+    post:
+      summary: Upload documents for processing
+      tags: [Documents]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  items: { type: string, format: binary }
+                  maxItems: 5
+      responses:
+        '201':
+          description: Documents uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/DocumentUpload' }
+                  message: { type: string, example: "3 document(s) uploaded and queued for processing" }
+
+  /files/{id}:
+    get:
+      summary: Get file metadata and signed download URL
+      tags: [Files]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: File information with download URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/FileDownload' }
+
+  /files/{id}/download:
+    get:
+      summary: Download file (signed URL endpoint)
+      tags: [Files]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: query
+          name: signature
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: File content
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '403':
+          description: Invalid or expired signature
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: string, example: "1" }
+        name: { type: string, example: "John Doe" }
+        email: { type: string, format: email, example: "john@example.com" }
+        role: { type: string, enum: [admin, team, client], example: "client" }
+        account_id: { type: string, example: "1" }
+
+    Project:
+      type: object
+      properties:
+        id: { type: string, example: "1" }
+        name: { type: string, example: "Downtown Adoption Center" }
+        description: { type: string, example: "Main adoption facility" }
+        status: { type: string, enum: [active, inactive, archived] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ProjectDetail:
+      allOf:
+        - $ref: '#/components/schemas/Project'
+        - type: object
+          properties:
+            owner: { $ref: '#/components/schemas/User' }
+            documents_count: { type: integer, example: 5 }
+            processed_documents_count: { type: integer, example: 3 }
+
+    DocumentUpload:
+      type: object
+      properties:
+        id: { type: string, example: "1" }
+        name: { type: string, example: "adoption-policy.pdf" }
+        size: { type: integer, example: 2048576 }
+        status: { type: string, enum: [pending, processing, completed, failed] }
+
+    FileDownload:
+      type: object
+      properties:
+        id: { type: string, example: "1" }
+        name: { type: string, example: "document.pdf" }
+        mime_type: { type: string, example: "application/pdf" }
+        size: { type: integer, example: 1024000 }
+        download_url: { type: string, format: uri, example: "https://api.rehome.app/api/files/1/download?signature=..." }
+        metadata: { type: object }
+        created_at: { type: string, format: date-time }
+
+    Source:
+      type: object
+      properties:
+        document_name: { type: string, example: "adoption-policy.pdf" }
+        document_id: { type: string, example: "1" }
+        chunk_index: { type: integer, example: 2 }
+        similarity: { type: number, format: float, example: 0.85 }
+        snippet: { type: string, example: "Adoption requirements include..." }
+
+    PaginationMeta:
+      type: object
+      properties:
+        current_page: { type: integer, example: 1 }
+        last_page: { type: integer, example: 5 }
+        per_page: { type: integer, example: 20 }
+        total: { type: integer, example: 95 }
+
+    Error:
+      type: object
+      properties:
+        ok: { type: boolean, example: false }
+        error: { type: string, example: "ValidationException" }
+        message: { type: string, example: "The given data was invalid." }
+
+tags:
+  - name: System
+    description: System health and status
+  - name: Authentication
+    description: User authentication and session management
+  - name: Projects
+    description: Project management and CRUD operations
+  - name: Documents
+    description: Document upload and management
+  - name: Files
+    description: File storage and retrieval
+  - name: RAG
+    description: Retrieval-Augmented Generation Q&A system

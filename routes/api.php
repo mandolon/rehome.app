@@ -20,10 +20,12 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Public authentication routes
-Route::post('/login', [AuthApiController::class, 'login']);
+Route::middleware('throttle:auth')->group(function () {
+    Route::post('/login', [AuthApiController::class, 'login']);
+});
 
 // Protected routes requiring authentication
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     // Auth management
     Route::get('/me', [AuthApiController::class, 'me']);
     Route::post('/logout', [AuthApiController::class, 'logout']);
