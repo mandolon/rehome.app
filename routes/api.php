@@ -31,8 +31,13 @@ Route::get('/health', function () {
 // API Version 1
 Route::prefix('v1')->group(function () {
     // Public authentication routes
-    Route::middleware('throttle:auth')->group(function () {
+    Route::middleware('throttle:login')->group(function () {
         Route::post('/login', [AuthApiController::class, 'login']);
+    });
+
+    // Other auth endpoints with general throttling
+    Route::middleware('throttle:auth')->group(function () {
+        // Add other public auth routes here if needed
     });
 
     // Protected routes requiring authentication

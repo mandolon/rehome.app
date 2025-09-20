@@ -23,9 +23,7 @@ class AuthApiController extends Controller
         $user = User::where('email', $request->email)->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
+            return Api::error('INVALID_CREDENTIALS', 'The provided credentials are incorrect.', 401);
         }
 
         $token = $user->createToken($request->device_name ?: 'mobile-app')->plainTextToken;
