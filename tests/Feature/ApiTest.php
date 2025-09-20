@@ -310,6 +310,28 @@ describe('Error Handling', function () {
                 'error' => 'ValidationException'
             ]);
     });
+    
+    it('returns standard success envelope for projects list', function () {
+        $token = $this->admin->createToken('test')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', "Bearer $token")
+            ->getJson('/api/v1/projects');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'ok',
+                'data' => [],
+                'meta' => [
+                    'page',
+                    'perPage', 
+                    'total',
+                    'lastPage'
+                ]
+            ])
+            ->assertJson([
+                'ok' => true
+            ]);
+    });
 });
 
 describe('Rate Limiting', function () {
