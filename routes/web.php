@@ -33,6 +33,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/team', function () {
             return Inertia::render('Team');
         })->name('team');
+        
+        Route::get('/teams/tasks', function () {
+            return Inertia::render('Teams/TaskBoard');
+        })->name('teams.tasks');
     });
     
     // Admin only routes
