@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ChatApiController;
 use App\Http\Controllers\Api\DocApiController;
 use App\Http\Controllers\Api\FileApiController;
 use App\Http\Controllers\Api\HealthController;
+use App\Http\Controllers\Api\Client\ClientTaskApiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -46,19 +47,22 @@ Route::prefix('v1')->group(function () {
         // Auth management
         Route::get('/me', [AuthApiController::class, 'me']);
         Route::post('/logout', [AuthApiController::class, 'logout']);
+        Route::post('/logout-all', [AuthApiController::class, 'logoutAll']);
 
         // Projects CRUD
         Route::apiResource('projects', ProjectApiController::class);
         
-        // Tasks CRUD
-        Route::apiResource('tasks', TaskApiController::class);
-        
-        // Task-specific actions
-        Route::post('/tasks/{task}/complete', [TaskApiController::class, 'complete']);
-        Route::post('/tasks/{task}/assign', [TaskApiController::class, 'assign']);
-        Route::post('/tasks/{task}/comments', [TaskApiController::class, 'addComment']);
-        Route::post('/tasks/{task}/files', [TaskApiController::class, 'attachFile']);
-        Route::delete('/tasks/{task}/files/{file}', [TaskApiController::class, 'detachFile']);
+        // Tasks with proper project scoping for account isolation
+        Route::scopeBindings()->group(function () {
+            Route::apiResource('projects.tasks', TaskApiController::class);
+            
+            // Task-specific actions
+            Route::post('/projects/{project}/tasks/{task}/complete', [TaskApiController::class, 'complete']);
+            Route::post('/projects/{project}/tasks/{task}/assign', [TaskApiController::class, 'assign']);
+            Route::post('/projects/{project}/tasks/{task}/comments', [TaskApiController::class, 'addComment']);
+            Route::post('/projects/{project}/tasks/{task}/files', [TaskApiController::class, 'attachFile']);
+            Route::delete('/projects/{project}/tasks/{task}/files/{file}', [TaskApiController::class, 'detachFile']);
+        });
         
         // Project-specific endpoints
         Route::post('/projects/{project}/ask', [ChatApiController::class, 'ask']);
@@ -68,5 +72,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/files/{file}', [FileApiController::class, 'show']);
         Route::get('/files/{file}/download', [FileApiController::class, 'download'])
              ->name('api.files.download');
+             
+        // Client-safe endpoints (restricted access)
+        Route::prefix('client')->group(function () {
+            Route::scopeBindings()->group(function () {
+                Route::get('/projects/{project}/tasks', [ClientTaskApiController::class, 'index']);
+                Route::get('/projects/{project}/tasks/{task}', [ClientTaskApiController::class, 'show']);
+            });
+        });
     });
 });

@@ -2,14 +2,7 @@
 
 namespace App\Providers;
 
-use App\Models\Project;
-use App\Models\Task;
-use App\Models\File;
-use App\Policies\ProjectPolicy;
-use App\Policies\TaskPolicy;
-use App\Policies\FilePolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
-use Illuminate\Support\Facades\Gate;
 
 class AuthServiceProvider extends ServiceProvider
 {
@@ -19,9 +12,8 @@ class AuthServiceProvider extends ServiceProvider
      * @var array<class-string, class-string>
      */
     protected $policies = [
-        Project::class => ProjectPolicy::class,
-        Task::class => TaskPolicy::class,
-        File::class => FilePolicy::class,
+        // Laravel will auto-discover policies based on naming conventions
+        // e.g., App\Models\Task => App\Policies\TaskPolicy
     ];
 
     /**
@@ -29,8 +21,6 @@ class AuthServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        $this->registerPolicies();
-
         // Additional gate definitions can be added here if needed
     }
 }

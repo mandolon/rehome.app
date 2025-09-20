@@ -17,7 +17,7 @@ class AuthApiController extends Controller
         $request->validate([
             'email' => 'required|email',
             'password' => 'required',
-            'device_name' => 'string|nullable',
+            'device_name' => 'required|string|max:255',
         ]);
 
         $user = User::where('email', $request->email)->first();
@@ -26,39 +26,57 @@ class AuthApiController extends Controller
             return Api::error('INVALID_CREDENTIALS', 'The provided credentials are incorrect.', 401);
         }
 
-        $token = $user->createToken($request->device_name ?: 'mobile-app')->plainTextToken;
+        // Revoke existing tokens for this device to prevent token accumulation
+        $user->tokens()->where('name', $request->device_name)->delete();
 
-        return Api::ok([
+        // Create new token
+        $token = $user->createToken($request->device_name)->plainTextToken;
+
+        return Api::success([
+            'token' => $token,
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role,
-                'account_id' => $user->account_id,
+                'account' => [
+                    'id' => $user->account->id,
+                    'name' => $user->account->name,
+                ],
             ],
-            'token' => $token,
-        ]);
+        ], 'Login successful');
     }
 
     public function me(Request $request)
     {
         $user = $request->user();
 
-        return Api::ok([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role,
-                'account_id' => $user->account_id,
+        return Api::success([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role,
+            'account' => [
+                'id' => $user->account->id,
+                'name' => $user->account->name,
             ],
-        ]);
+        ], 'User info retrieved');
     }
 
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
 
-        return Api::ok([], [], 200);
+        return Api::success(null, 'Logout successful');
+    }
+
+    /**
+     * Revoke all tokens for user (logout from all devices)
+     */
+    public function logoutAll(Request $request)
+    {
+        $request->user()->tokens()->delete();
+
+        return Api::success(null, 'Logged out from all devices');
     }
 }

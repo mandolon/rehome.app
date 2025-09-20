@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\HasApiDateFormat;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, HasApiDateFormat;
 
     protected $fillable = [
         'account_id',
@@ -77,5 +78,17 @@ class User extends Authenticatable
     public function hasPermission(string $permission): bool
     {
         return in_array($permission, $this->permissions ?? []);
+    }
+
+    /**
+     * Get the user's role within a specific account
+     */
+    public function roleIn(Account $account): ?string
+    {
+        if ($this->account_id === $account->id) {
+            return $this->role;
+        }
+        
+        return null; // User doesn't belong to this account
     }
 }

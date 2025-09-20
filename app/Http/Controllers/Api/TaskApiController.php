@@ -9,14 +9,14 @@ use App\Models\File;
 use App\Support\Api;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Validation\Rule;
 
 class TaskApiController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, Project $project): JsonResponse
     {
+        $this->authorize('viewAny', [Task::class, $project]);
+
         $validated = $request->validate([
-            'project_id' => 'nullable|uuid|exists:projects,id',
             'category' => 'nullable|string|in:TASK/REDLINE,PROGRESS/UPDATE',
             'status' => 'nullable|string|in:open,complete',
             'assignee_id' => 'nullable|integer|exists:users,id',
@@ -27,36 +27,28 @@ class TaskApiController extends Controller
         ]);
 
         $user = $request->user();
-        $query = Task::with(['project', 'assignee', 'createdBy']);
+        $role = $user->roleIn($project->account);
+        
+        $query = Task::where('project_id', $project->id)
+                    ->with(['project', 'assignee', 'createdBy']);
 
-        // Filter by user's accessible projects
-        if ($user->isClient()) {
-            $projectIds = $user->account->projects()
-                ->where('user_id', $user->id)
-                ->pluck('id');
-            $query->whereIn('project_id', $projectIds)
-                  ->clientVisible();
-        } else {
-            $query->whereHas('project', function ($q) use ($user) {
-                $q->where('account_id', $user->account_id);
+        // Role-based task filtering
+        if ($role === 'team') {
+            // team sees only tasks assigned to them (or created by them)
+            $query->where(function ($q) use ($user) {
+                $q->where('assignee_id', $user->id)
+                  ->orWhere('created_by_id', $user->id);
             });
         }
+        // admin: no extra filter - sees all tasks in project
 
-        // Apply filters
-        if (isset($validated['project_id'])) {
-            $query->where('project_id', $validated['project_id']);
-        }
-
+        // Apply additional filters
         if (isset($validated['category'])) {
-            $query->byCategory($validated['category']);
+            $query->where('category', $validated['category']);
         }
 
         if (isset($validated['status'])) {
-            if ($validated['status'] === 'open') {
-                $query->open();
-            } elseif ($validated['status'] === 'complete') {
-                $query->complete();
-            }
+            $query->where('status', $validated['status']);
         }
 
         if (isset($validated['assignee_id'])) {
@@ -64,7 +56,8 @@ class TaskApiController extends Controller
         }
 
         if (isset($validated['overdue']) && $validated['overdue']) {
-            $query->overdue();
+            $query->where('due_date', '<', now())
+                  ->where('status', '!=', 'complete');
         }
 
         if (isset($validated['search'])) {
@@ -81,10 +74,11 @@ class TaskApiController extends Controller
         return Api::success($tasks, 'Tasks retrieved successfully');
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, Project $project): JsonResponse
     {
+        $this->authorize('create', [Task::class, $project]);
+
         $validated = $request->validate([
-            'project_id' => 'required|uuid|exists:projects,id',
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'category' => 'required|string|in:TASK/REDLINE,PROGRESS/UPDATE',
@@ -96,12 +90,6 @@ class TaskApiController extends Controller
         ]);
 
         $user = $request->user();
-        $project = Project::findOrFail($validated['project_id']);
-
-        // Authorization check using TaskPolicy
-        if (!$user->can('create', [Task::class, $project])) {
-            return Api::error('Unauthorized', 403);
-        }
 
         // Validate assignee belongs to same account
         if (isset($validated['assignee_id'])) {
@@ -112,7 +100,7 @@ class TaskApiController extends Controller
         }
 
         $task = Task::create([
-            'project_id' => $validated['project_id'],
+            'project_id' => $project->id,
             'title' => $validated['title'],
             'description' => $validated['description'],
             'category' => $validated['category'],
@@ -145,30 +133,28 @@ class TaskApiController extends Controller
         return Api::success($task, 'Task created successfully', 201);
     }
 
-    public function show(string $id): JsonResponse
+    public function show(Project $project, Task $task): JsonResponse
     {
-        $task = Task::with(['project', 'assignee', 'createdBy', 'files', 'activities.user'])
-                   ->findOrFail($id);
+        $this->authorize('view', $task);
 
-        $user = request()->user();
-
-        // Authorization check using TaskPolicy
-        if (!$user->can('view', $task)) {
-            return Api::error('Unauthorized', 403);
-        }
+        $task->load([
+            'project', 
+            'assignee', 
+            'createdBy', 
+            'files',
+            'activities' => function ($query) {
+                $query->with('user:id,name')
+                      ->orderBy('created_at', 'desc')
+                      ->limit(20); // Limit for performance
+            }
+        ]);
 
         return Api::success($task, 'Task retrieved successfully');
     }
 
-    public function update(Request $request, string $id): JsonResponse
+    public function update(Request $request, Project $project, Task $task): JsonResponse
     {
-        $task = Task::findOrFail($id);
-        $user = $request->user();
-
-        // Authorization check using TaskPolicy
-        if (!$user->can('update', $task)) {
-            return Api::error('Unauthorized', 403);
-        }
+        $this->authorize('update', $task);
 
         $validated = $request->validate([
             'title' => 'nullable|string|max:255',
@@ -180,9 +166,7 @@ class TaskApiController extends Controller
             'allow_client' => 'nullable|boolean',
         ]);
 
-        // Track changes for activity log
-        $changes = [];
-        $originalData = $task->toArray();
+        $user = $request->user();
 
         // Validate assignee belongs to same account
         if (isset($validated['assignee_id'])) {
@@ -191,6 +175,10 @@ class TaskApiController extends Controller
                 return Api::error('Assignee must belong to the same account', 422);
             }
         }
+
+        // Track changes for activity log
+        $changes = [];
+        $originalData = $task->toArray();
 
         $task->fill($validated);
 
@@ -222,31 +210,20 @@ class TaskApiController extends Controller
         return Api::success($task, 'Task updated successfully');
     }
 
-    public function destroy(string $id): JsonResponse
+    public function destroy(Project $project, Task $task): JsonResponse
     {
-        $task = Task::findOrFail($id);
-        $user = request()->user();
-
-        // Authorization check using TaskPolicy
-        if (!$user->can('delete', $task)) {
-            return Api::error('Unauthorized', 403);
-        }
+        $this->authorize('delete', $task);
 
         $task->delete();
 
         return Api::success(null, 'Task deleted successfully');
     }
 
-    public function complete(Request $request, string $id): JsonResponse
+    public function complete(Request $request, Project $project, Task $task): JsonResponse
     {
-        $task = Task::findOrFail($id);
+        $this->authorize('complete', $task);
+
         $user = $request->user();
-
-        // Authorization check using TaskPolicy - assignee or team member can complete
-        if (!$user->can('complete', $task)) {
-            return Api::error('Unauthorized', 403);
-        }
-
         $task->markAsComplete($user);
 
         $task->load(['project', 'assignee', 'createdBy']);
@@ -254,19 +231,15 @@ class TaskApiController extends Controller
         return Api::success($task, 'Task marked as complete');
     }
 
-    public function assign(Request $request, string $id): JsonResponse
+    public function assign(Request $request, Project $project, Task $task): JsonResponse
     {
+        $this->authorize('update', $task);
+
         $validated = $request->validate([
             'assignee_id' => 'required|integer|exists:users,id',
         ]);
 
-        $task = Task::findOrFail($id);
         $user = $request->user();
-
-        // Authorization check using TaskPolicy
-        if (!$user->can('update', $task)) {
-            return Api::error('Unauthorized', 403);
-        }
 
         // Validate assignee belongs to same account
         $assignee = $user->account->users()->find($validated['assignee_id']);
@@ -281,20 +254,15 @@ class TaskApiController extends Controller
         return Api::success($task, 'Task assigned successfully');
     }
 
-    public function addComment(Request $request, string $id): JsonResponse
+    public function addComment(Request $request, Project $project, Task $task): JsonResponse
     {
+        $this->authorize('comment', $task);
+
         $validated = $request->validate([
             'comment' => 'required|string|max:1000',
         ]);
 
-        $task = Task::findOrFail($id);
         $user = $request->user();
-
-        // Authorization check using TaskPolicy
-        if (!$user->can('comment', $task)) {
-            return Api::error('Unauthorized', 403);
-        }
-
         $activity = $task->addComment($user, $validated['comment']);
 
         $activity->load('user');
@@ -302,22 +270,17 @@ class TaskApiController extends Controller
         return Api::success($activity, 'Comment added successfully', 201);
     }
 
-    public function attachFile(Request $request, string $id): JsonResponse
+    public function attachFile(Request $request, Project $project, Task $task): JsonResponse
     {
+        $this->authorize('attachFile', $task);
+
         $validated = $request->validate([
             'file_id' => 'required|uuid|exists:files,id',
             'attachment_type' => 'nullable|string|in:attachment,redline,revision',
             'notes' => 'nullable|string|max:500',
         ]);
 
-        $task = Task::findOrFail($id);
         $user = $request->user();
-
-        // Authorization check using TaskPolicy
-        if (!$user->can('attachFile', $task)) {
-            return Api::error('Unauthorized', 403);
-        }
-
         $file = File::findOrFail($validated['file_id']);
 
         // Ensure file belongs to the same project
@@ -337,16 +300,11 @@ class TaskApiController extends Controller
         return Api::success($taskFile, 'File attached successfully', 201);
     }
 
-    public function detachFile(Request $request, string $id, string $fileId): JsonResponse
+    public function detachFile(Request $request, Project $project, Task $task, string $fileId): JsonResponse
     {
-        $task = Task::findOrFail($id);
+        $this->authorize('attachFile', $task);
+
         $user = $request->user();
-
-        // Authorization check using TaskPolicy
-        if (!$user->can('attachFile', $task)) {
-            return Api::error('Unauthorized', 403);
-        }
-
         $taskFile = $task->taskFiles()->where('file_id', $fileId)->first();
 
         if (!$taskFile) {

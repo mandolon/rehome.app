@@ -5,6 +5,13 @@ info:
   description: |
     API-first preconstruction platform focusing on design, permit, and building workflows.
     
+    ## Mobile/Desktop Ready
+    - Consistent envelope format: `{ ok, data, meta }`
+    - ISO-8601 date formats for all timestamps
+    - CORS configured for mobile origins (Expo, localhost)
+    - Signed URLs for secure file downloads (15min expiry)
+    - Client-safe endpoints at `/client/*` with filtered data
+    
     ## Rate Limiting
     - Login endpoints: 5 requests per minute per IP
     - General API endpoints: 120 requests per minute per authenticated user
@@ -13,6 +20,12 @@ info:
     ## Authentication
     Uses Laravel Sanctum token-based authentication. Include the token in the Authorization header:
     `Authorization: Bearer {token}`
+    
+    ### Mobile Auth Flow
+    1. POST `/login` with device_name for token
+    2. Store token securely (Keychain/SecureStore)  
+    3. Include in Authorization header: `Bearer {token}`
+    4. Call `/logout` or `/logout-all` to revoke tokens
   contact:
     name: API Support
     email: support@rehome.app
@@ -80,6 +93,9 @@ paths:
       description: |
         Authenticate user and receive access token for API requests.
         Rate limited to 5 attempts per minute per IP address.
+        
+        For mobile apps: device_name is required for token management.
+        Previous tokens for the same device will be revoked.
       tags: [Authentication]
       requestBody:
         required: true
@@ -87,11 +103,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [email, password]
+              required: [email, password, device_name]
               properties:
                 email: { type: string, format: email, example: "user@example.com" }
                 password: { type: string, example: "password123" }
-                device_name: { type: string, example: "iPhone 14" }
+                device_name: { type: string, example: "iPhone 14", description: "Device identifier for token management" }
       responses:
         '200':
           description: Login successful

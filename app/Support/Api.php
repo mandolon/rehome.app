@@ -3,9 +3,42 @@
 namespace App\Support;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class Api
 {
+    /**
+     * Standard success response with consistent envelope
+     */
+    public static function success($data = null, string $message = null, int $status = 200): JsonResponse
+    {
+        $response = [
+            'ok' => true,
+            'data' => $data,
+        ];
+
+        if ($message) {
+            $response['message'] = $message;
+        }
+
+        // Handle pagination metadata
+        if ($data instanceof LengthAwarePaginator) {
+            $response['data'] = $data->items();
+            $response['meta'] = [
+                'page' => $data->currentPage(),
+                'perPage' => $data->perPage(),
+                'total' => $data->total(),
+                'lastPage' => $data->lastPage(),
+                'hasMorePages' => $data->hasMorePages(),
+            ];
+        }
+
+        return response()->json($response, $status);
+    }
+
+    /**
+     * Legacy ok method - redirects to success for consistency
+     */
     public static function ok($data = [], $meta = [], int $status = 200): JsonResponse
     {
         $response = [
@@ -22,16 +55,7 @@ class Api
 
     public static function created($data = [], string $message = null): JsonResponse
     {
-        $response = [
-            'ok' => true,
-            'data' => $data,
-        ];
-
-        if ($message) {
-            $response['message'] = $message;
-        }
-
-        return response()->json($response, 201);
+        return self::success($data, $message ?: 'Created successfully', 201);
     }
 
     public static function error(string $error, string $message, int $status = 500): JsonResponse

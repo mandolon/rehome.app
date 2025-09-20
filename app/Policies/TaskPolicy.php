@@ -2,153 +2,166 @@
 
 namespace App\Policies;
 
-use App\Models\User;
 use App\Models\Task;
 use App\Models\Project;
+use App\Models\User;
 
 class TaskPolicy
 {
     /**
-     * Determine whether the user can view any tasks.
+     * Collection authorization (used in index + create)
+     * Admin: can see everything in account
+     * Team: can only access projects they are assigned to
+     * Client: no access to team board
      */
-    public function viewAny(User $user): bool
+    public function viewAny(User $user, Project $project): bool
     {
-        return $user->isTeamMember() || $user->isClient();
+        $role = $user->roleIn($project->account);
+
+        if ($role === 'admin') return true;
+
+        // team can only access projects they are assigned to
+        if ($role === 'team') {
+            return $project->members()->where('user_id', $user->id)->exists();
+        }
+
+        return false; // clients not allowed on team board
     }
 
     /**
-     * Determine whether the user can view the task.
-     * Admin|team in same account; client only if (allow_client=true AND project member)
+     * Single task authorization
+     * Admin: can see everything in account
+     * Team: can see only tasks assigned to them or ones they created
+     * Client: no access to team board
      */
     public function view(User $user, Task $task): bool
     {
-        // Must be in same account
-        if ($user->account_id !== $task->project->account_id) {
-            return false;
+        $role = $user->roleIn($task->project->account);
+
+        if ($role === 'admin') return true;
+
+        if ($role === 'team') {
+            // see only tasks assigned to them (or ones they created)
+            return $task->assignee_id === $user->id
+                || $task->created_by_id === $user->id;
         }
 
-        // Admin|team can see all tasks in their account
-        if ($user->isTeamMember()) {
-            return true;
-        }
-
-        // Client can only see tasks if:
-        // 1. Task allows client visibility (allow_client=true)
-        // 2. Client is the project member (project owner)
-        if ($user->isClient()) {
-            return $task->allow_client && 
-                   $task->project->user_id === $user->id;
-        }
-
-        return false;
+        return false; // clients not allowed
     }
 
     /**
-     * Determine whether the user can create tasks.
-     * Admin|team in same account only
+     * Task creation authorization
+     * Admin: can create anywhere in account
+     * Team: can create only on projects they're assigned to
+     * Client: no creation access
      */
     public function create(User $user, Project $project): bool
     {
-        return $user->isTeamMember() && 
-               $user->account_id === $project->account_id;
+        $role = $user->roleIn($project->account);
+        
+        if ($role === 'admin') return true;
+
+        // allow team to create tasks only on projects they're assigned to
+        if ($role === 'team') {
+            return $project->members()->where('user_id', $user->id)->exists();
+        }
+        
+        return false; // clients cannot create
     }
 
     /**
-     * Determine whether the user can update the task.
-     * Admin|team in same account only
+     * Task update authorization
+     * Admin: can update everything in account
+     * Team: can update only their own tasks (assignee or creator)
+     * Client: no update access
      */
     public function update(User $user, Task $task): bool
     {
-        // Must be in same account
-        if ($user->account_id !== $task->project->account_id) {
-            return false;
-        }
+        $role = $user->roleIn($task->project->account);
+        
+        if ($role === 'admin') return true;
 
-        // Only admin|team members can update tasks
-        return $user->isTeamMember();
+        // team can update only their own tasks (assignee or creator)
+        if ($role === 'team') {
+            return $task->assignee_id === $user->id
+                || $task->created_by_id === $user->id;
+        }
+        
+        return false; // clients cannot update
     }
 
     /**
-     * Determine whether the user can delete the task.
-     * Admin|team in same account only
+     * Task deletion authorization
+     * Admin: can delete everything in account
+     * Team/Client: no deletion access (admin-only operation)
      */
     public function delete(User $user, Task $task): bool
     {
-        // Must be in same account
-        if ($user->account_id !== $task->project->account_id) {
-            return false;
-        }
+        $role = $user->roleIn($task->project->account);
+        
+        if ($role === 'admin') return true;
 
-        // Only admin|team members can delete tasks
-        return $user->isTeamMember();
+        // usually only admin deletes; strict rule
+        return false;
     }
 
     /**
-     * Determine whether the user can complete the task.
+     * Task completion authorization
+     * Admin: can complete everything in account
+     * Team: can complete only their assigned tasks or ones they created
+     * Client: no completion access
      */
     public function complete(User $user, Task $task): bool
     {
-        // Must be in same account
-        if ($user->account_id !== $task->project->account_id) {
-            return false;
+        $role = $user->roleIn($task->project->account);
+        
+        if ($role === 'admin') return true;
+
+        if ($role === 'team') {
+            return $task->assignee_id === $user->id
+                || $task->created_by_id === $user->id;
         }
-
-        // Task assignee can complete their own task
-        if ($task->assignee_id === $user->id) {
-            return true;
-        }
-
-        // Team members can complete any task
-        return $user->isTeamMember();
-    }
-
-    /**
-     * Determine whether the user can comment on the task.
-     * Admin|team; client only if allow_client=true
-     */
-    public function comment(User $user, Task $task): bool
-    {
-        // Must be in same account
-        if ($user->account_id !== $task->project->account_id) {
-            return false;
-        }
-
-        // Admin|team can comment on all tasks
-        if ($user->isTeamMember()) {
-            return true;
-        }
-
-        // Client can comment only if task allows client visibility
-        if ($user->isClient()) {
-            return $task->allow_client && 
-                   $task->project->user_id === $user->id;
-        }
-
+        
         return false;
     }
 
     /**
-     * Determine whether the user can attach files to the task.
-     * Admin|team; client only if allow_client=true
+     * File attachment authorization
+     * Admin: can attach files anywhere in account
+     * Team: can attach only to their tasks
+     * Client: no file attachment access
      */
     public function attachFile(User $user, Task $task): bool
     {
-        // Must be in same account
-        if ($user->account_id !== $task->project->account_id) {
-            return false;
+        $role = $user->roleIn($task->project->account);
+        
+        if ($role === 'admin') return true;
+        
+        if ($role === 'team') {
+            return $task->assignee_id === $user->id
+                || $task->created_by_id === $user->id;
         }
+        
+        return false; // clients cannot attach files
+    }
 
-        // Admin|team can attach files to all tasks
-        if ($user->isTeamMember()) {
-            return true;
+    /**
+     * Comment authorization
+     * Admin: can comment anywhere in account
+     * Team: can comment only on their tasks
+     * Client: no comment access
+     */
+    public function comment(User $user, Task $task): bool
+    {
+        $role = $user->roleIn($task->project->account);
+        
+        if ($role === 'admin') return true;
+        
+        if ($role === 'team') {
+            return $task->assignee_id === $user->id
+                || $task->created_by_id === $user->id;
         }
-
-        // Client can attach files only if task allows client visibility
-        if ($user->isClient()) {
-            return $task->allow_client && 
-                   $task->project->user_id === $user->id;
-        }
-
-        return false;
+        
+        return false; // clients cannot comment
     }
 }
