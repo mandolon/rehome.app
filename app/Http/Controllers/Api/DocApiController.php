@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\Document;
-use App\Jobs\ProcessDocumentJob;
+use App\Jobs\IngestDocumentJob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
@@ -49,18 +49,20 @@ class DocApiController extends Controller
                 ],
             ]);
 
-            // Queue for processing (chunking, embedding, etc.)
-            ProcessDocumentJob::dispatch($document);
+            // Queue for processing with IngestDocumentJob (chunking, embedding, etc.)
+            $job = IngestDocumentJob::dispatch($project->id, $document->id, $path);
 
             $uploadedDocs[] = [
                 'id' => $document->id,
                 'name' => $document->original_name,
                 'size' => $document->size,
                 'status' => $document->status,
+                'job_id' => $job->getJobId() ?? uniqid('job_'),
             ];
         }
 
         return response()->json([
+            'ok' => true,
             'data' => $uploadedDocs,
             'message' => sprintf('%d document(s) uploaded and queued for processing', count($uploadedDocs)),
         ], 201);

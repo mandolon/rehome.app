@@ -11,11 +11,11 @@ class EmbeddingService
     {
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . config('services.openai.api_key'),
+                'Authorization' => 'Bearer ' . config('app.openai_api_key'),
                 'Content-Type' => 'application/json',
             ])->post('https://api.openai.com/v1/embeddings', [
                 'input' => $text,
-                'model' => 'text-embedding-ada-002',
+                'model' => 'text-embedding-3-small',
             ]);
 
             if ($response->successful()) {
@@ -35,11 +35,11 @@ class EmbeddingService
     {
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . config('services.openai.api_key'),
+                'Authorization' => 'Bearer ' . config('app.openai_api_key'),
                 'Content-Type' => 'application/json',
             ])->post('https://api.openai.com/v1/embeddings', [
                 'input' => $texts,
-                'model' => 'text-embedding-ada-002',
+                'model' => 'text-embedding-3-small',
             ]);
 
             if ($response->successful()) {
