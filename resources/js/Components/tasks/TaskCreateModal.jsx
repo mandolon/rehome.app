@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
+import { apiPost } from '../../lib/api';
 
 export default function TaskCreateModal({ 
   isOpen = false, 
   onClose = () => {},
-  onCreate = () => {}
+  onCreate = () => {},
+  onCreated = () => {},
+  projectId = '1'
 }) {
   const [formData, setFormData] = useState({
     title: '',
@@ -13,19 +16,47 @@ export default function TaskCreateModal({
     dueDate: ''
   });
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  // API state
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // API-integrated create handler
+  async function handleCreate() {
     if (!formData.title.trim()) return;
     
-    onCreate(formData);
-    setFormData({
-      title: '',
-      description: '',
-      category: 'TASK/REDLINE',
-      priority: 'medium',
-      dueDate: ''
-    });
-    onClose();
+    setSaving(true);
+    setError("");
+    try {
+      const res = await apiPost(`/projects/${projectId}/tasks`, {
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        status: 'todo', // backend enum: todo/in_progress/blocked/done
+        assignee_id: null, // can be extended later
+        due_date: formData.dueDate || null,
+      });
+      
+      onCreated?.(res?.data);
+      onClose?.();
+      
+      // Reset form
+      setFormData({
+        title: '',
+        description: '',
+        category: 'TASK/REDLINE',
+        priority: 'medium',
+        dueDate: ''
+      });
+    } catch (e) {
+      setError(e?.response?.data?.message || "Failed to create task.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    handleCreate();
   };
 
   if (!isOpen) return null;
@@ -53,6 +84,12 @@ export default function TaskCreateModal({
           </div>
           {/* Form */}
           <form onSubmit={handleSubmit} className="p-6">
+            {/* Error Display */}
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
             {/* Title */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -138,9 +175,10 @@ export default function TaskCreateModal({
               </button>
               <button 
                 type="submit"
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+                disabled={saving || !formData.title.trim()}
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Create Task
+                {saving ? 'Creating...' : 'Create Task'}
               </button>
             </div>
           </form>

@@ -1,291 +1,546 @@
-import React, { useState, useEffect } from 'react';
-import { usePage } from '@inertiajs/react';
+import React from 'react';
 import AppLayout from '../../Layouts/AppLayout';
 import TaskDrawer from '../../Components/tasks/TaskDrawer';
 import TaskCreateModal from '../../Components/tasks/TaskCreateModal';
 import GroupSection from '../../Components/tasks/GroupSection';
 import FilterChip from '../../Components/common/FilterChip';
-import { apiGet, apiPost, apiPatch } from '../../lib/api';
 
-// Mock data for immediate UI rendering
-const MOCK_TASKS = [
-  {
-    id: '1',
-    title: 'Review architectural plans',
-    subtitle: 'Ocean View Resort • 123 Beach Blvd, Miami, FL',
-    category: 'TASK/REDLINE',
-    status: 'open',
-    description: 'Review the latest architectural plans for the main lobby renovation. Focus on structural changes and code compliance.',
-    createdAt: '2025-06-21T10:30:00Z',
-    createdBy: { id: 1, name: 'John Smith', initials: 'JS' },
-    assignees: [
-      { id: 2, name: 'Sarah Johnson', initials: 'SJ' },
-      { id: 3, name: 'Mike Chen', initials: 'MC' }
-    ],
-    dueDate: '2025-06-30',
-    allowClient: false,
-    fileCount: 3,
-    attachments: [
-      { id: 1, filename: 'floor-plan-v2.pdf', size: '2.4 MB', uploadedBy: 'John Smith', uploadedAt: '2025-06-21T10:00:00Z' },
-      { id: 2, filename: 'elevation-drawings.dwg', size: '1.8 MB', uploadedBy: 'Sarah Johnson', uploadedAt: '2025-06-21T09:30:00Z' }
-    ],
-    activity: [
-      { id: 1, type: 'status_change', description: 'Status changed: draft → open', timestamp: '2025-06-21T10:30:00Z', user: 'John Smith' },
-      { id: 2, type: 'assignee_added', description: 'Sarah Johnson assigned to task', timestamp: '2025-06-21T10:15:00Z', user: 'John Smith' }
-    ]
-  },
-  {
-    id: '2',
-    title: 'Update client on foundation progress',
-    subtitle: 'Downtown Office Complex • 456 Main St, Boston, MA',
-    category: 'PROGRESS/UPDATE',
-    status: 'open',
-    description: 'Prepare weekly progress update for the foundation work including photos and timeline updates.',
-    createdAt: '2025-06-20T14:15:00Z',
-    createdBy: { id: 3, name: 'Mike Chen', initials: 'MC' },
-    assignees: [{ id: 1, name: 'John Smith', initials: 'JS' }],
-    dueDate: '2025-06-25',
-    allowClient: true,
-    fileCount: 1,
-    attachments: [],
-    activity: []
-  },
-  {
-    id: '3',
-    title: 'Plumbing fixture placement review',
-    subtitle: 'All bathroom fixtures',
-    category: 'TASK/REDLINE',
-    status: 'complete',
-    description: 'Review placement of all bathroom fixtures against architectural plans.',
-    createdAt: '2025-06-19T09:15:00Z',
-    createdBy: { id: 4, name: 'Alex Rivera', initials: 'AR' },
-    assignees: [
-      { id: 1, name: 'John Smith', initials: 'JS' },
-      { id: 5, name: 'Lisa Brown', initials: 'LB' }
-    ],
-    dueDate: '2025-06-25',
-    allowClient: true,
-    fileCount: 2,
-    attachments: [
-      { id: 3, filename: 'bathroom_layout.dwg', size: '1.8 MB', uploadedBy: 'Alex Rivera', uploadedAt: '2025-06-19T09:15:00Z' },
-      { id: 4, filename: 'fixture_specs.pdf', size: '3.2 MB', uploadedBy: 'Lisa Brown', uploadedAt: '2025-06-19T11:30:00Z' }
-    ],
-    activity: [
-      { id: 3, type: 'assignee_added', description: 'Lisa Brown was assigned to this task', timestamp: '2025-06-19T11:00:00Z', user: 'Alex Rivera' },
-      { id: 4, type: 'status_change', description: 'Status changed: open → complete', timestamp: '2025-06-19T16:00:00Z', user: 'Lisa Brown' }
-    ]
-  }
-];
-
-export default function TaskBoard({ projectId = null }) {
-  const { auth } = usePage().props;
-  
-  // Use mock data for now - TODO: Replace with API calls
-  const [tasks, setTasks] = useState(MOCK_TASKS);
-  const [loading, setLoading] = useState(false); // Set to false for immediate render
-  const [error, setError] = useState(null);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-
-  // TODO: Implement API loading
-  // useEffect(() => {
-  //   loadTasks();
-  // }, [projectId]);
-
-  // TODO: Replace with real API call
-  // const loadTasks = async () => {
-  //   try {
-  //     setLoading(true);
-  //     setError(null);
-  //     
-  //     const currentProjectId = projectId || 1;
-  //     const response = await apiGet(`/api/v1/projects/${currentProjectId}/tasks`);
-  //     
-  //     const tasksData = response.data || response;
-  //     setTasks(Array.isArray(tasksData) ? tasksData : []);
-  //   } catch (err) {
-  //     console.error('Error loading tasks:', err);
-  //     setError(err.message);
-  //     setTasks(MOCK_TASKS); // Fallback to mock data
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
-  // Group tasks by category
-  const groupedTasks = tasks.reduce((groups, task) => {
-    if (!groups[task.category]) {
-      groups[task.category] = [];
+export default function TaskBoard() {
+  const [tasks, setTasks] = React.useState([
+    {
+      id: '1',
+      title: 'Review architectural plans',
+      subtitle: 'Ocean View Resort • 123 Beach Blvd, Miami, FL',
+      category: 'TASK/REDLINE',
+      status: 'open',
+      description: 'Review the latest architectural plans for the main lobby renovation. Focus on structural changes and code compliance.',
+      createdAt: '2025-06-21T10:30:00Z',
+      createdBy: { id: 1, name: 'John Smith', initials: 'JS' },
+      assignees: [
+        { id: 2, name: 'Sarah Johnson', initials: 'SJ' },
+        { id: 3, name: 'Mike Chen', initials: 'MC' }
+      ],
+      dueDate: '2025-06-30',
+      allowClient: false,
+      filesCount: 3,
+      attachments: [
+        { id: 1, filename: 'floor-plan-v2.pdf', size: '2.4 MB', uploadedBy: 'John Smith', uploadedAt: '2025-06-21T10:00:00Z' },
+        { id: 2, filename: 'elevation-drawings.dwg', size: '1.8 MB', uploadedBy: 'Sarah Johnson', uploadedAt: '2025-06-21T09:30:00Z' }
+      ],
+      activity: [
+        { id: 1, type: 'status_change', description: 'Status changed: draft → open', timestamp: '2025-06-21T10:30:00Z', user: 'John Smith' },
+        { id: 2, type: 'assignee_added', description: 'Sarah Johnson assigned to task', timestamp: '2025-06-21T10:15:00Z', user: 'John Smith' }
+      ]
+    },
+    {
+      id: '2',
+      title: 'Update client on foundation progress',
+      subtitle: 'Downtown Office Complex • 456 Main St, Boston, MA',
+      category: 'PROGRESS/UPDATE',
+      status: 'open',
+      description: 'Prepare weekly progress update for the foundation work including photos and timeline updates.',
+      createdAt: '2025-06-20T14:15:00Z',
+      createdBy: { id: 3, name: 'Mike Chen', initials: 'MC' },
+      assignees: [{ id: 1, name: 'John Smith', initials: 'JS' }],
+      dueDate: '2025-06-25',
+      allowClient: true,
+      filesCount: 1,
+      attachments: [],
+      activity: []
+    },
+    {
+      id: '3',
+      title: 'Electrical system inspection',
+      subtitle: 'Ocean View Resort • 123 Beach Blvd, Miami, FL',
+      category: 'TASK/REDLINE',
+      status: 'complete',
+      description: 'Complete electrical inspection for floors 1-3 according to local building codes.',
+      createdAt: '2025-06-19T09:00:00Z',
+      createdBy: { id: 2, name: 'Sarah Johnson', initials: 'SJ' },
+      assignees: [{ id: 4, name: 'Alex Rivera', initials: 'AR' }],
+      dueDate: '2025-06-22',
+      allowClient: false,
+      filesCount: 0,
+      attachments: [],
+      activity: []
     }
-    groups[task.category].push(task);
-    return groups;
-  }, {});
+  ]);
+
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [selectedTask, setSelectedTask] = React.useState(null);
+  const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
+  const [showClosed, setShowClosed] = React.useState(false);
+  const [collapsedGroups, setCollapsedGroups] = React.useState({});
+  const [editData, setEditData] = React.useState({});
+
+  const mockUsers = [
+    { id: 1, name: 'John Smith', initials: 'JS' },
+    { id: 2, name: 'Sarah Johnson', initials: 'SJ' },
+    { id: 3, name: 'Mike Chen', initials: 'MC' },
+    { id: 4, name: 'Alex Rivera', initials: 'AR' },
+    { id: 5, name: 'Emma Wilson', initials: 'EW' }
+  ];
+
+  // Helper functions
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: '2-digit' 
+    }).replace(',', '');
+  };
+
+  const getAvatarColor = (name) => {
+    const colors = [
+      '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16',
+      '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9',
+      '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef',
+      '#ec4899', '#f43f5e'
+    ];
+    const index = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[index % colors.length];
+  };
+
+  // URL sync for task drawer
+  React.useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const taskId = urlParams.get('task');
+    
+    if (taskId && !isDrawerOpen) {
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        setSelectedTask(task);
+        setIsDrawerOpen(true);
+      }
+    } else if (!taskId && isDrawerOpen) {
+      setIsDrawerOpen(false);
+      setSelectedTask(null);
+    }
+  }, [tasks, isDrawerOpen]);
+
+  const updateURL = (taskId) => {
+    const url = new URL(window.location);
+    if (taskId) {
+      url.searchParams.set('task', taskId);
+    } else {
+      url.searchParams.delete('task');
+    }
+    window.history.replaceState({}, '', url);
+  };
+
+  React.useEffect(() => {
+    if (selectedTask) {
+      setEditData({
+        title: selectedTask.title || '',
+        description: selectedTask.description || '',
+        status: selectedTask.status || 'open',
+        assigneeIds: selectedTask.assignees?.map(a => a.id) || [],
+        dueDate: selectedTask.dueDate || '',
+        allowClient: selectedTask.allowClient || false
+      });
+    }
+  }, [selectedTask]);
+
+  const filteredTasks = tasks.filter(task => {
+    const matchesSearch = !searchQuery || 
+      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      task.subtitle.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = showClosed || task.status !== 'complete';
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  const groupedTasks = {
+    'TASK/REDLINE': filteredTasks.filter(task => task.category === 'TASK/REDLINE'),
+    'PROGRESS/UPDATE': filteredTasks.filter(task => task.category === 'PROGRESS/UPDATE')
+  };
 
   const handleTaskClick = (task) => {
-    // TODO: Load full task details from API
-    // try {
-    //   const response = await apiGet(`/api/v1/tasks/${task.id}`);
-    //   const fullTask = response.data || response;
-    //   setSelectedTask(fullTask);
-    // } catch (err) {
-    //   console.error('Error loading task details:', err);
-    //   setSelectedTask(task); // Fallback to basic task data
-    // }
-    
-    // For now, use mock task data
     setSelectedTask(task);
     setIsDrawerOpen(true);
+    updateURL(task.id);
   };
 
-  const handleCloseDrawer = () => {
+  const handleDrawerClose = () => {
     setIsDrawerOpen(false);
     setSelectedTask(null);
+    updateURL(null);
   };
 
-  const handleCreateTask = async (taskData) => {
-    // TODO: Replace with real API call
-    // try {
-    //   const currentProjectId = projectId || 1;
-    //   const response = await apiPost(`/api/v1/projects/${currentProjectId}/tasks`, taskData);
-    //   await loadTasks(); // Refresh task list
-    //   setIsCreateModalOpen(false);
-    // } catch (err) {
-    //   console.error('Error creating task:', err);
-    // }
-    
-    // For now, add to local state
+  const handleTaskUpdate = (taskId, updateData) => {
+    setTasks(prev => prev.map(task => 
+      task.id === taskId 
+        ? { 
+            ...task, 
+            ...updateData,
+            assignees: updateData.assigneeIds 
+              ? mockUsers.filter(user => updateData.assigneeIds.includes(user.id))
+              : task.assignees
+          }
+        : task
+    ));
+    setIsDrawerOpen(false);
+    updateURL(null);
+  };
+
+  const handleCreateTask = (formData) => {
     const newTask = {
-      id: Date.now().toString(),
-      ...taskData,
+      id: String(Date.now()),
+      ...formData,
       createdAt: new Date().toISOString(),
-      createdBy: { name: auth.user?.name || 'Current User', initials: 'CU' },
+      createdBy: { id: 1, name: 'Current User', initials: 'CU' },
       assignees: [],
-      fileCount: 0,
       attachments: [],
-      activity: [{
-        id: Date.now(),
-        type: 'task_created',
-        description: 'Task created',
-        user: auth.user?.name || 'Current User',
-        timestamp: new Date().toISOString()
-      }]
+      activity: [],
+      filesCount: 0
     };
-    
-    setTasks(prev => [...prev, newTask]);
+    setTasks(prev => [newTask, ...prev]);
     setIsCreateModalOpen(false);
   };
 
-  const handleUpdateTask = async (taskId, updatedData) => {
-    // TODO: Replace with real API call
-    // try {
-    //   await apiPatch(`/api/v1/tasks/${taskId}`, updatedData);
-    //   await loadTasks(); // Refresh task list
-    //   handleCloseDrawer();
-    // } catch (err) {
-    //   console.error('Error updating task:', err);
-    // }
-    
-    // For now, update local state
-    setTasks(prev => 
-      prev.map(task => 
-        task.id === taskId ? { ...task, ...updatedData } : task
-      )
-    );
-    handleCloseDrawer();
+  const toggleGroup = (groupName) => {
+    setCollapsedGroups(prev => ({
+      ...prev,
+      [groupName]: !prev[groupName]
+    }));
   };
 
-  if (loading) {
-    return (
-      <AppLayout>
-        <div className="max-w-7xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/2 mb-8"></div>
-            <div className="space-y-4">
-              <div className="h-16 bg-gray-200 rounded"></div>
-              <div className="h-16 bg-gray-200 rounded"></div>
-              <div className="h-16 bg-gray-200 rounded"></div>
-            </div>
+  return (
+    <AppLayout>
+      <style>{`
+        .task-board-root {
+          --bg-primary: #ffffff;
+          --bg-secondary: #f8f9fa;
+          --bg-tertiary: #f1f3f4;
+          --text-primary: #202124;
+          --text-secondary: #5f6368;
+          --text-muted: #9aa0a6;
+          --border-color: #dadce0;
+          --accent-primary: #1a73e8;
+          --success: #137333;
+          font-family: 'Google Sans', Roboto, sans-serif;
+        }
+        
+        [data-theme="dark"] .task-board-root {
+          --bg-primary: #1f1f1f;
+          --bg-secondary: #2d2d30;
+          --bg-tertiary: #3c3c3c;
+          --text-primary: #cccccc;
+          --text-secondary: #969696;
+          --text-muted: #6c6c6c;
+          --border-color: #3c3c3c;
+          --accent-primary: #4285f4;
+          --success: #34a853;
+        }
+
+        .avatar-chip {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 10px;
+          font-weight: 500;
+          color: white;
+        }
+
+        .status-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          display: inline-block;
+        }
+
+        .status-open { background-color: var(--accent-primary); }
+        .status-complete { background-color: var(--success); }
+
+        .task-row {
+          cursor: pointer;
+          transition: background-color 0.15s ease;
+        }
+
+        .task-row:hover {
+          background-color: var(--bg-tertiary);
+        }
+
+        .drawer-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: rgba(0, 0, 0, 0.4);
+          z-index: 1000;
+        }
+
+        .drawer-content {
+          position: fixed;
+          top: 0;
+          right: 0;
+          height: 100vh;
+          width: 400px;
+          background-color: var(--bg-primary);
+          box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
+          overflow-y: auto;
+          transform: translateX(100%);
+          transition: transform 0.3s ease;
+          z-index: 1001;
+        }
+
+        .drawer-content.open {
+          transform: translateX(0);
+        }
+
+        @media (max-width: 768px) {
+          .drawer-content {
+            width: 100%;
+          }
+        }
+
+        .group-pill {
+          display: inline-block;
+          padding: 2px 8px;
+          border-radius: 10px;
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+          color: white;
+        }
+
+        .pill-task { background-color: #1a73e8; }
+        .pill-progress { background-color: #34a853; }
+
+        .filter-button {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 8px;
+          font-size: 12px;
+          color: var(--text-secondary);
+          background: transparent;
+          border: 1px solid transparent;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .filter-button:hover {
+          background-color: var(--bg-tertiary);
+          border-color: var(--border-color);
+        }
+
+        .files-badge {
+          background-color: var(--bg-tertiary);
+          color: var(--text-secondary);
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-size: 11px;
+          font-weight: 500;
+        }
+
+        .input-field {
+          width: 100%;
+          padding: 8px 12px;
+          border: 1px solid var(--border-color);
+          border-radius: 4px;
+          background-color: var(--bg-primary);
+          color: var(--text-primary);
+          font-size: 14px;
+        }
+
+        .input-field:focus {
+          outline: none;
+          border-color: var(--accent-primary);
+          box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+        }
+
+        .textarea-field {
+          width: 100%;
+          padding: 12px;
+          border: 1px solid var(--border-color);
+          border-radius: 4px;
+          background-color: var(--bg-primary);
+          color: var(--text-primary);
+          font-size: 14px;
+          min-height: 80px;
+          resize: vertical;
+          font-family: inherit;
+          line-height: 1.4;
+        }
+
+        .textarea-field:focus {
+          outline: none;
+          border-color: var(--accent-primary);
+          box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+        }
+
+        .btn {
+          padding: 8px 16px;
+          border-radius: 4px;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          border: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .btn-primary {
+          background-color: var(--accent-primary);
+          color: white;
+        }
+
+        .btn-primary:hover {
+          background-color: #1557b0;
+        }
+
+        .btn-secondary {
+          background-color: var(--bg-secondary);
+          color: var(--text-primary);
+          border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+          background-color: var(--bg-tertiary);
+        }
+
+        .status-toggle {
+          display: flex;
+          background-color: var(--bg-secondary);
+          border-radius: 4px;
+          border: 1px solid var(--border-color);
+          overflow: hidden;
+        }
+
+        .status-toggle button {
+          flex: 1;
+          padding: 8px 16px;
+          border: none;
+          background: transparent;
+          color: var(--text-secondary);
+          font-size: 14px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .status-toggle button.active {
+          background-color: var(--accent-primary);
+          color: white;
+        }
+      `}</style>
+
+      <div className="task-board-root h-full bg-background flex flex-col overflow-hidden" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+        {/* Header */}
+        <div style={{ borderBottom: '1px solid var(--border-color)', padding: '4px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div></div>
           </div>
         </div>
-      </AppLayout>
-    );
-  }
 
-  if (error) {
-    return (
-      <AppLayout>
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-red-50 border border-red-200 rounded-md p-4">
-            <div className="text-red-800">
-              <h3 className="font-medium">Error loading tasks</h3>
-              <p className="text-sm mt-1">{error}</p>
+        {/* Filters */}
+        <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', paddingRight: '8px' }}>Group by:</span>
+            
+            <FilterChip>Status</FilterChip>
+            <FilterChip>Projects</FilterChip>
+            <FilterChip>Date Created</FilterChip>
+            <FilterChip>Assignee</FilterChip>
+            <FilterChip>Created by</FilterChip>
+
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input 
+                type="text"
+                placeholder="Search tasks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  width: '200px',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)'
+                }}
+              />
+              
+              <button className="btn btn-secondary" disabled>+ Add Note</button>
+              <button className="btn btn-secondary" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="m5,16-3,-3 2,-2 3,3"></path>
+                  <path d="m13,13 3,-3"></path>
+                </svg>
+                Screen Clip
+              </button>
+              <button className="btn btn-secondary" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <path d="m9,9 5,5"></path>
+                  <path d="m15,9-5,5"></path>
+                </svg>
+                ToDo
+              </button>
+              
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px' }}>
+                <input 
+                  type="checkbox"
+                  checked={showClosed}
+                  onChange={(e) => setShowClosed(e.target.checked)}
+                />
+                Completed
+              </label>
+              
               <button 
-                onClick={() => window.location.reload()}
-                className="mt-2 text-sm text-red-600 hover:text-red-500 underline"
+                className="btn btn-primary"
+                onClick={() => setIsCreateModalOpen(true)}
               >
-                Try again
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Add Task
               </button>
             </div>
           </div>
         </div>
-      </AppLayout>
-    );
-  }
 
-  return (
-    <AppLayout>
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Task Board</h1>
-            <p className="text-gray-600">Manage project tasks and progress updates</p>
+        {/* Content */}
+        <div style={{ flex: 1, padding: '16px', backgroundColor: 'var(--bg-primary)', overflowY: 'auto' }}>
+          <div style={{ maxWidth: '100%', margin: '0 auto' }}>
+            {Object.entries(groupedTasks).map(([groupName, groupTasks]) => (
+              <GroupSection
+                key={groupName}
+                groupName={groupName}
+                groupTasks={groupTasks}
+                isCollapsed={collapsedGroups[groupName]}
+                onToggle={() => toggleGroup(groupName)}
+                onTaskClick={handleTaskClick}
+                formatDate={formatDate}
+              />
+            ))}
           </div>
-          <button 
-            onClick={() => setIsCreateModalOpen(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            + New Task
-          </button>
         </div>
 
-        {/* Filters */}
-        <div className="flex gap-2 mb-6">
-          <FilterChip>All Tasks</FilterChip>
-          <FilterChip>Open</FilterChip>
-          <FilterChip>Complete</FilterChip>
-          <FilterChip>Overdue</FilterChip>
-        </div>
-
-        {/* Task Groups */}
-        <div className="space-y-6">
-          {Object.entries(groupedTasks).map(([category, categoryTasks]) => (
-            <GroupSection
-              key={category}
-              title={category}
-              tasks={categoryTasks}
-              onTaskClick={handleTaskClick}
-            />
-          ))}
-          
-          {Object.keys(groupedTasks).length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No tasks found. Create your first task to get started.</p>
-            </div>
-          )}
-        </div>
-
-        {/* Task Drawer */}
         <TaskDrawer
           isOpen={isDrawerOpen}
-          task={selectedTask}
-          onClose={handleCloseDrawer}
-          onUpdate={handleUpdateTask}
+          selectedTask={selectedTask}
+          editData={editData}
+          setEditData={setEditData}
+          mockUsers={mockUsers}
+          onClose={handleDrawerClose}
+          onUpdate={handleTaskUpdate}
+          formatDate={formatDate}
+          getAvatarColor={getAvatarColor}
         />
 
-        {/* Create Task Modal */}
         <TaskCreateModal
           isOpen={isCreateModalOpen}
           onClose={() => setIsCreateModalOpen(false)}

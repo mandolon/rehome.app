@@ -9,9 +9,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('projects', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('account_id')->constrained()->onDelete('cascade');
-            $table->foreignId('user_id')->constrained()->onDelete('cascade'); // owner
+            $table->uuid('id')->primary();
+            $table->unsignedBigInteger('account_id');
+            $table->unsignedBigInteger('user_id'); // owner
+            $table->foreign('account_id')->references('id')->on('accounts')->onDelete('cascade');
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
             $table->string('name');
             $table->text('description')->nullable();
             $table->enum('status', ['active', 'inactive', 'archived'])->default('active');

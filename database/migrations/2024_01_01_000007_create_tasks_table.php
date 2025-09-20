@@ -13,13 +13,13 @@ return new class extends Migration
     {
         Schema::create('tasks', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->uuid('project_id')->index();
+            $table->uuid('project_id');
             $table->string('title');
             $table->text('description')->nullable();
-            $table->string('category')->index()->comment('e.g., TASK/REDLINE, PROGRESS/UPDATE');
-            $table->string('status')->index()->default('open')->comment('open | complete');
-            $table->bigInteger('assignee_id')->nullable()->index()->comment('references users(id)');
-            $table->bigInteger('created_by_id')->index()->comment('references users(id)');
+            $table->string('category')->comment('e.g., TASK/REDLINE, PROGRESS/UPDATE');
+            $table->string('status')->default('open')->comment('open | complete');
+            $table->bigInteger('assignee_id')->nullable()->comment('references users(id)');
+            $table->bigInteger('created_by_id')->comment('references users(id)');
             $table->date('due_date')->nullable();
             $table->boolean('allow_client')->default(false)->comment('if true, visible in client view/summaries');
             $table->integer('files_count')->default(0);
@@ -33,8 +33,12 @@ return new class extends Migration
             $table->foreign('created_by_id')->references('id')->on('users')->onDelete('cascade');
 
             // Composite indexes for performance
+            $table->index(['project_id']);
+            $table->index(['category']);
+            $table->index(['status']);
             $table->index(['project_id', 'category', 'status']);
             $table->index(['assignee_id']);
+            $table->index(['created_by_id']);
             $table->index(['due_date']);
             $table->index(['created_at']);
         });

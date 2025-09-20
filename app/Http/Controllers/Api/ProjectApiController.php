@@ -49,7 +49,6 @@ class ProjectApiController extends Controller
                 'lastPage' => $projects->lastPage(),
             ],
         ]);
-        ]);
     }
 
     public function store(Request $request)

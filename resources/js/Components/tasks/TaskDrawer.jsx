@@ -1,21 +1,68 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { apiPatch, apiPost } from '../../lib/api';
 
 export default function TaskDrawer({ 
   isOpen = false, 
   task = null, 
   onClose = () => {},
-  onUpdate = () => {}
+  onSaved = () => {},
+  projectId = '1'
 }) {
-  if (!isOpen || !task) return null;
+  // Form state
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [status, setStatus] = useState('open');
+  const [assigneeId, setAssigneeId] = useState('');
+  const [file, setFile] = useState(null);
 
-  const handleSave = () => {
-    // TODO: Implement task updating with form data
-    // For now, just close the drawer
-    onUpdate(task.id, { 
-      // Mock update - in real implementation, collect form data
-      updatedAt: new Date().toISOString()
-    });
-  };
+  // API state
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // Update form when task changes
+  useEffect(() => {
+    if (task) {
+      setTitle(task.title || '');
+      setDescription(task.description || '');
+      setStatus(task.status || 'todo'); // backend enum: todo/in_progress/blocked/done
+      setAssigneeId(task.assignee_id || '');
+      setFile(null);
+      setError('');
+    }
+  }, [task]);
+
+  // API-integrated save handler
+  async function handleSave() {
+    if (!task) return;
+    
+    setSaving(true);
+    setError("");
+    try {
+      const res = await apiPatch(`/projects/${projectId}/tasks/${task.id}`, {
+        title,
+        description,
+        status,
+        assignee_id: assigneeId || null,
+      });
+
+      // Upload file if provided
+      if (file) {
+        const form = new FormData();
+        form.append("file_id", file.id); // assuming file object has id
+        await apiPost(`/tasks/${task.id}/files`, form, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+
+      onSaved?.(res?.data);
+      onClose?.();
+    } catch (e) {
+      setError(e?.response?.data?.message || "Failed to save task.");
+    } finally {
+      setSaving(false);
+    }
+  }
+  if (!isOpen || !task) return null;
 
   return (
     <>
@@ -35,11 +82,6 @@ export default function TaskDrawer({
             }`}>
               {task.category}
             </span>
-            {task.status === 'complete' && (
-              <span className="ml-2 px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded">
-                Complete
-              </span>
-            )}
           </div>
           <button 
             onClick={onClose}
@@ -51,127 +93,60 @@ export default function TaskDrawer({
 
         {/* Content */}
         <div className="flex-1 p-6 overflow-y-auto">
-          <h2 className="text-xl font-semibold mb-2">{task.title}</h2>
-          <p className="text-gray-600 mb-4">{task.subtitle}</p>
-          <p className="text-sm text-gray-500 mb-6">{task.description}</p>
-          
-          {/* Task Details */}
-          <div className="space-y-4 mb-6">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                Created By
-              </label>
-              <div className="flex items-center space-x-2">
-                <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                  {task.createdBy?.initials || 'UN'}
-                </div>
-                <span className="text-sm text-gray-900">{task.createdBy?.name || 'Unknown'}</span>
-              </div>
+          {/* Error Display */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-600">{error}</p>
             </div>
+          )}
 
-            {task.assignees && task.assignees.length > 0 && (
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                  Assignees
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {task.assignees.map((assignee, index) => (
-                    <div key={index} className="flex items-center space-x-2">
-                      <div className="w-6 h-6 bg-gray-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                        {assignee.initials}
-                      </div>
-                      <span className="text-sm text-gray-900">{assignee.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                Created Date
-              </label>
-              <span className="text-sm text-gray-900">
-                {task.createdAt && new Date(task.createdAt).toLocaleDateString('en-US', { 
-                  month: 'long', 
-                  day: 'numeric', 
-                  year: 'numeric' 
-                })}
-              </span>
-            </div>
-
-            {task.dueDate && (
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                  Due Date
-                </label>
-                <span className="text-sm text-gray-900">
-                  {new Date(task.dueDate).toLocaleDateString('en-US', { 
-                    month: 'long', 
-                    day: 'numeric', 
-                    year: 'numeric' 
-                  })}
-                </span>
-              </div>
-            )}
+          {/* Editable Title */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Title
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
-          {/* Attachments */}
-          {task.attachments && task.attachments.length > 0 && (
-            <div className="mb-6">
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
-                Attachments ({task.attachments.length})
-              </label>
-              <div className="space-y-2">
-                {task.attachments.map((attachment) => (
-                  <div key={attachment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                    <div className="flex items-center space-x-3">
-                      <span className="text-lg">📄</span>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {attachment.filename}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {attachment.size} • {attachment.uploadedBy}
-                        </div>
-                      </div>
-                    </div>
-                    <button className="text-gray-400 hover:text-gray-600">
-                      ⋯
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Editable Description */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Description
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows="3"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
 
-          {/* Activity */}
-          {task.activity && task.activity.length > 0 && (
-            <div className="mb-6">
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
-                Activity
-              </label>
-              <div className="space-y-3">
-                {task.activity.map((activity) => (
-                  <div key={activity.id} className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-white text-xs">
-                        {activity.type === 'status_change' && '🔄'}
-                        {activity.type === 'assignee_added' && '👤'}
-                        {activity.type === 'task_created' && '✨'}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900">{activity.description}</p>
-                      <p className="text-xs text-gray-500">
-                        {activity.user} • {new Date(activity.timestamp).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Status Selection */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Status
+            </label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="todo">To Do</option>
+              <option value="in_progress">In Progress</option>
+              <option value="blocked">Blocked</option>
+              <option value="done">Done</option>
+            </select>
+          </div>
+          
+          {/* Placeholder for more content */}
+          <div className="mt-6">
+            <p className="text-sm text-gray-400">Task details will be implemented here...</p>
+          </div>
         </div>
 
         {/* Footer */}
@@ -185,9 +160,10 @@ export default function TaskDrawer({
             </button>
             <button 
               onClick={handleSave}
-              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+              disabled={saving}
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Save Changes
+              {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </div>

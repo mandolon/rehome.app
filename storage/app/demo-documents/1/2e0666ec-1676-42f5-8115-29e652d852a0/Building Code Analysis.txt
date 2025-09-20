@@ -1,0 +1,38 @@
+BUILDING CODE COMPLIANCE ANALYSIS
+
+PROJECT: Riverside Residential Complex
+CODE: 2021 International Building Code (IBC)
+
+CONSTRUCTION TYPE: Type V-A Wood Frame
+OCCUPANCY GROUP: R-3 One and Two-Family Dwellings
+
+FIRE SAFETY REQUIREMENTS:
+- Automatic sprinkler systems required in all units
+- Smoke detectors in all bedrooms and hallways
+- Fire-rated assemblies: 1-hour between units
+- Emergency exits: Two means of egress per unit
+
+ACCESSIBILITY COMPLIANCE:
+- ADA accessible routes to all units
+- 5% of units fully accessible (Type A)
+- 2% of units with hearing/vision features (Type B)
+- Accessible parking spaces: 1 per 25 spaces
+
+STRUCTURAL REQUIREMENTS:
+- Seismic design category D provisions
+- Wind load: 110 mph basic wind speed
+- Snow load: 25 psf ground snow load
+- Foundation: Spread footings on engineered fill
+
+ENERGY CODE COMPLIANCE:
+- Insulation: R-20 walls, R-38 ceiling
+- Windows: U-factor 0.30 maximum
+- HVAC: 16 SEER minimum cooling equipment
+- Water heating: 0.67 energy factor minimum
+
+PERMIT SUBMISSION REQUIREMENTS:
+- Architectural plans (11 sets)
+- Structural calculations and drawings
+- MEP plans and load calculations
+- Site plan with utilities
+- Soils report and foundation design

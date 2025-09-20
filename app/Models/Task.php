@@ -13,7 +13,7 @@ use Illuminate\Support\Str;
 
 class Task extends Model
 {
-    use HasFactory, HasApiDateFormat;
+    use HasFactory, HasApiDateFormat, SoftDeletes;
 
     protected $table = 'tasks';
     public $incrementing = false;
@@ -42,6 +42,7 @@ class Task extends Model
         'comments_count' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     protected static function boot()

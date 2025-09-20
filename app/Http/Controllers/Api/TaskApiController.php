@@ -18,10 +18,14 @@ class TaskApiController extends Controller
 
         $validated = $request->validate([
             'category' => 'nullable|string|in:TASK/REDLINE,PROGRESS/UPDATE',
-            'status' => 'nullable|string|in:open,complete',
-            'assignee_id' => 'nullable|integer|exists:users,id',
+            'status' => 'nullable|array',
+            'status.*' => 'string|in:open,complete',
+            'assignee_id' => 'nullable|array',
+            'assignee_id.*' => 'integer|exists:users,id',
+            'q' => 'nullable|string|max:255',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
             'overdue' => 'nullable|boolean',
-            'search' => 'nullable|string|max:255',
             'page' => 'nullable|integer|min:1',
             'per_page' => 'nullable|integer|min:1|max:100',
         ]);
@@ -47,12 +51,20 @@ class TaskApiController extends Controller
             $query->where('category', $validated['category']);
         }
 
-        if (isset($validated['status'])) {
-            $query->where('status', $validated['status']);
+        if (isset($validated['status']) && is_array($validated['status'])) {
+            $query->whereIn('status', $validated['status']);
         }
 
-        if (isset($validated['assignee_id'])) {
-            $query->where('assignee_id', $validated['assignee_id']);
+        if (isset($validated['assignee_id']) && is_array($validated['assignee_id'])) {
+            $query->whereIn('assignee_id', $validated['assignee_id']);
+        }
+
+        if (isset($validated['date_from'])) {
+            $query->whereDate('created_at', '>=', $validated['date_from']);
+        }
+
+        if (isset($validated['date_to'])) {
+            $query->whereDate('created_at', '<=', $validated['date_to']);
         }
 
         if (isset($validated['overdue']) && $validated['overdue']) {
@@ -60,8 +72,8 @@ class TaskApiController extends Controller
                   ->where('status', '!=', 'complete');
         }
 
-        if (isset($validated['search'])) {
-            $search = $validated['search'];
+        if (isset($validated['q'])) {
+            $search = $validated['q'];
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'ilike', "%{$search}%")
                   ->orWhere('description', 'ilike', "%{$search}%");
@@ -71,7 +83,31 @@ class TaskApiController extends Controller
         $tasks = $query->orderBy('created_at', 'desc')
                       ->paginate($validated['per_page'] ?? 20);
 
-        return Api::success($tasks, 'Tasks retrieved successfully');
+        // Get grouped counts for meta information
+        $baseQuery = Task::where('project_id', $project->id);
+        
+        // Apply role-based filtering for counts as well
+        if ($role === 'team') {
+            $baseQuery->where(function ($q) use ($user) {
+                $q->where('assignee_id', $user->id)
+                  ->orWhere('created_by_id', $user->id);
+            });
+        }
+
+        $counts = [
+            'by_category' => $baseQuery->clone()
+                ->selectRaw('category, count(*) as count')
+                ->groupBy('category')
+                ->pluck('count', 'category')
+                ->toArray(),
+            'by_status' => $baseQuery->clone()
+                ->selectRaw('status, count(*) as count')
+                ->groupBy('status')
+                ->pluck('count', 'status')
+                ->toArray(),
+        ];
+
+        return Api::success($tasks, 'Tasks retrieved successfully', null, ['counts' => $counts]);
     }
 
     public function store(Request $request, Project $project): JsonResponse
@@ -328,5 +364,35 @@ class TaskApiController extends Controller
         // files_count will be decremented automatically by TaskFile model events
 
         return Api::success(null, 'File detached successfully');
+    }
+
+    public function files(Request $request, Task $task): JsonResponse
+    {
+        $this->authorize('attachFile', $task);
+
+        $validated = $request->validate([
+            'file_id' => 'required|uuid|exists:files,id',
+            'attachment_type' => 'nullable|string|in:attachment,redline,revision',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $user = $request->user();
+        $file = File::findOrFail($validated['file_id']);
+
+        // Ensure file belongs to the same project
+        if ($file->project_id !== $task->project_id) {
+            return Api::error('File must belong to the same project as the task', 422);
+        }
+
+        $taskFile = $task->attachFile(
+            $file,
+            $user,
+            $validated['attachment_type'] ?? 'attachment',
+            $validated['notes']
+        );
+
+        $taskFile->load(['file', 'addedBy']);
+
+        return Api::success($taskFile, 'File attached successfully', 201);
     }
 }

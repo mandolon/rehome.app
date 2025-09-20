@@ -13,6 +13,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             DemoDataSeeder::class,
+            // TaskDemoSeeder::class, // disabled - uses old schema
         ]);
     }
 }

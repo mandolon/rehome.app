@@ -1,52 +1,84 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import AppLayout from '../Layouts/AppLayout';
 import FilterChip from '../common/FilterChip';
 import GroupSection from './GroupSection';
 import TaskDrawer from './TaskDrawer';
 import TaskCreateModal from './TaskCreateModal';
+import { apiGet } from '../../lib/api';
 
-// Mock data for demo
-const MOCK_TASKS = [
-  {
-    id: 1,
-    title: 'Electrical rough-in inspection needed',
-    subtitle: '2nd floor master bedroom',
-    description: 'Review electrical rough-in work in master bedroom before drywall installation.',
-    category: 'TASK/REDLINE',
-    status: 'open',
-    createdAt: '2024-01-15T10:00:00Z',
-    createdBy: { name: 'John Smith', initials: 'JS' },
-    assignees: [{ name: 'Mike Davis', initials: 'MD' }],
-    fileCount: 3
-  },
-  {
-    id: 2,
-    title: 'Foundation inspection complete',
-    subtitle: 'West side foundation',
-    description: 'Foundation inspection passed all requirements.',
-    category: 'PROGRESS/UPDATE',
-    status: 'complete',
-    createdAt: '2024-01-14T14:30:00Z',
-    createdBy: { name: 'Sarah Wilson', initials: 'SW' },
-    assignees: [{ name: 'John Smith', initials: 'JS' }],
-    fileCount: 0
-  }
-];
+export default function TaskBoard({ projectId = '1' }) {
+  // API state
+  const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState({ counts: {}, pagination: {} });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-export default function TaskBoard() {
-  const [tasks] = useState(MOCK_TASKS);
+  // Filter state (match UI controls)
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState([]);           // status[]
+  const [assignees, setAssignees] = useState([]);     // assignee_id[]
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
   const [selectedTask, setSelectedTask] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  
-  // Group tasks by category
-  const groupedTasks = tasks.reduce((groups, task) => {
-    if (!groups[task.category]) {
-      groups[task.category] = [];
+
+  // Build API params
+  const params = useMemo(() => {
+    const p = {};
+    if (q) p.q = q;
+    if (status.length) p["status[]"] = status;
+    if (assignees.length) p["assignee_id[]"] = assignees;
+    if (dateFrom) p.date_from = dateFrom;
+    if (dateTo) p.date_to = dateTo;
+    return p;
+  }, [q, status, assignees, dateFrom, dateTo]);
+
+  // Load tasks from API
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await apiGet(`/projects/${projectId}/tasks`, params);
+      setRows(res?.data ?? []);
+      setMeta(res?.meta ?? {});
+    } catch (e) {
+      setError(e?.response?.data?.message || "Failed to load tasks.");
+      setRows([]); // Show empty state on error
+    } finally {
+      setLoading(false);
     }
-    groups[task.category].push(task);
+  }
+
+  // Call load() on mount + when filters change
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, JSON.stringify(params)]);
+
+  // Category normalization for grouping
+  function normalizeCategory(raw) {
+    if (!raw) return "OTHER";
+    const up = String(raw).toUpperCase();
+    if (up.includes("TASK") || up.includes("REDLINE")) return "TASK/REDLINE";
+    if (up.includes("PROGRESS") || up.includes("UPDATE")) return "PROGRESS/UPDATE";
+    return "OTHER";
+  }
+
+  // Group tasks by category - use only API data
+  const groupedTasks = rows.reduce((groups, task) => {
+    const category = normalizeCategory(task.category);
+    if (!groups[category]) {
+      groups[category] = [];
+    }
+    groups[category].push(task);
     return groups;
   }, {});
+
+  // Show "No tasks yet" message when empty
+  const isEmpty = rows.length === 0;
+  const showEmptyState = isEmpty && !loading;
 
   const handleTaskClick = (task) => {
     setSelectedTask(task);
@@ -60,7 +92,14 @@ export default function TaskBoard() {
 
   const handleCreateTask = (taskData) => {
     console.log('Creating task:', taskData);
-    // In real app, this would call API
+    // Refresh task list after creation
+    load();
+  };
+
+  const handleTaskSaved = (savedTask) => {
+    console.log('Task saved:', savedTask);
+    // Refresh task list after save
+    load();
   };
 
   return (
@@ -99,9 +138,17 @@ export default function TaskBoard() {
             />
           ))}
           
-          {Object.keys(groupedTasks).length === 0 && (
+          {Object.keys(groupedTasks).length === 0 && !loading && (
             <div className="text-center py-12">
-              <p className="text-gray-500">No tasks found. Create your first task to get started.</p>
+              <p className="text-gray-500">
+                {error ? `Error loading tasks: ${error}` : "No tasks yet. Create your first task to get started."}
+              </p>
+            </div>
+          )}
+          
+          {loading && (
+            <div className="text-center py-12">
+              <p className="text-gray-500">Loading tasks...</p>
             </div>
           )}
         </div>
@@ -111,6 +158,8 @@ export default function TaskBoard() {
           isOpen={isDrawerOpen}
           task={selectedTask}
           onClose={handleCloseDrawer}
+          onSaved={handleTaskSaved}
+          projectId={projectId}
         />
 
         {/* Create Task Modal */}
@@ -118,6 +167,8 @@ export default function TaskBoard() {
           isOpen={isCreateModalOpen}
           onClose={() => setIsCreateModalOpen(false)}
           onCreate={handleCreateTask}
+          onCreated={handleCreateTask}
+          projectId={projectId}
         />
       </div>
     </AppLayout>

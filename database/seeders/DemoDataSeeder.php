@@ -81,7 +81,7 @@ class DemoDataSeeder extends Seeder
                 'account_id' => $constructionAccount->id,
                 'name' => 'Downtown Mixed-Use Development',
                 'description' => '8-story mixed-use building with retail ground floor and residential units above. Located in the urban core with complex zoning requirements.',
-                'phase' => 'Permitting',
+                'phase' => 'permit',
                 'zoning' => 'MU-3 Mixed Use High Density',
                 'user_id' => $admin->id,
             ],
@@ -89,7 +89,7 @@ class DemoDataSeeder extends Seeder
                 'account_id' => $constructionAccount->id,
                 'name' => 'Riverside Residential Complex',
                 'description' => 'Multi-family residential development featuring 24 townhomes with sustainable design elements and waterfront access.',
-                'phase' => 'Design Development',
+                'phase' => 'design',
                 'zoning' => 'R-4 Multi-Family Residential',
                 'user_id' => $teamMember->id,
             ],
@@ -97,7 +97,7 @@ class DemoDataSeeder extends Seeder
                 'account_id' => $developmentAccount->id,
                 'name' => 'Tech Campus Expansion',
                 'description' => 'Corporate office expansion including parking structures, landscaping, and utility infrastructure for a major tech company.',
-                'phase' => 'Schematic Design',
+                'phase' => 'design',
                 'zoning' => 'C-2 Commercial Office',
                 'user_id' => $client->id,
             ],
@@ -110,6 +110,7 @@ class DemoDataSeeder extends Seeder
                 'account_id' => $projectData['account_id'],
             ], [
                 'account_id' => $projectData['account_id'],
+                'user_id' => $projectData['user_id'],
                 'description' => $projectData['description'],
                 'phase' => $projectData['phase'],
                 'zoning' => $projectData['zoning'],
@@ -287,7 +288,7 @@ This Environmental Impact Assessment evaluates the potential environmental effec
             
             // Create storage path
             $storagePath = sprintf(
-                'demo-documents/%d/%d/%s',
+                'demo-documents/%s/%s/%s',
                 $project->account_id,
                 $project->id,
                 $template['name']

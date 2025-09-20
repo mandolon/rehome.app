@@ -11,7 +11,8 @@ return new class extends Migration
         Schema::create('files', function (Blueprint $table) {
             $table->id();
             $table->foreignId('account_id')->constrained()->onDelete('cascade');
-            $table->foreignId('project_id')->nullable()->constrained()->onDelete('set null');
+            $table->uuid('project_id')->nullable()->index();
+            $table->foreign('project_id')->references('id')->on('projects')->onDelete('set null');
             $table->string('original_name');
             $table->string('storage_path');
             $table->string('mime_type');

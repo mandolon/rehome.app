@@ -14,9 +14,43 @@ use Inertia\Inertia;
 |
 */
 
-Route::get('/', function () {
-    return Inertia::render('Landing');
+// Simple sanity check
+Route::get('/ping', fn () => 'ok');
+
+// Test database connection
+Route::get('/test-tasks', function () {
+    try {
+        $count = \DB::table('tasks')->count();
+        $tasks = \DB::table('tasks')->limit(3)->get();
+        return response()->json([
+            'total_tasks' => $count,
+            'sample_tasks' => $tasks
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage()
+        ]);
+    }
 });
+
+Route::get('/', fn () => Inertia::render('Home'));
+
+// Public taskboard (no auth required) - temporary server-side version
+Route::get('/taskboard', function () {
+    // Get tasks using raw query to avoid model issues
+    try {
+        $tasks = \DB::table('tasks')->get(); // Remove the deleted_at filter
+        
+        // Return HTML directly instead of Inertia for testing
+        return response()->view('taskboard-simple', ['tasks' => $tasks]);
+    } catch (\Exception $e) {
+        // Fallback to simple render if database fails
+        return Inertia::render('SimpleTaskBoard', [
+            'tasks' => [],
+            'error' => $e->getMessage()
+        ]);
+    }
+})->name('taskboard');
 
 // Authenticated routes
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -33,10 +67,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/team', function () {
             return Inertia::render('Team');
         })->name('team');
-        
-        Route::get('/teams/tasks', function () {
-            return Inertia::render('Teams/TaskBoard');
-        })->name('teams.tasks');
     });
     
     // Admin only routes

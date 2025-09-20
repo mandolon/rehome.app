@@ -1,0 +1,1 @@
+export default () => (<div style={{padding:24}}><h1>It works 🎉</h1></div>)

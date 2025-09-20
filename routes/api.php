@@ -6,7 +6,7 @@ use App\Http\Controllers\Api\TaskApiController;
 use App\Http\Controllers\Api\ChatApiController;
 use App\Http\Controllers\Api\DocApiController;
 use App\Http\Controllers\Api\FileApiController;
-use App\Http\Controllers\Api\HealthController;
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\Api\Client\ClientTaskApiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -23,14 +23,12 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Health check endpoints (public)
-Route::get('/health', [HealthController::class, 'health']);
-Route::get('/ready', [HealthController::class, 'ready']);
+Route::get('/health', HealthController::class);
 
 // API Version 1
 Route::prefix('v1')->group(function () {
     // Health endpoints
-    Route::get('/health', [HealthController::class, 'health']);
-    Route::get('/ready', [HealthController::class, 'ready']);
+    Route::get('/health', HealthController::class);
 
     // Public authentication routes
     Route::middleware('throttle:login')->group(function () {
@@ -63,6 +61,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/projects/{project}/tasks/{task}/files', [TaskApiController::class, 'attachFile']);
             Route::delete('/projects/{project}/tasks/{task}/files/{file}', [TaskApiController::class, 'detachFile']);
         });
+        
+        // Additional task file endpoint (simplified path)
+        Route::post('/tasks/{task}/files', [TaskApiController::class, 'files']);
         
         // Project-specific endpoints
         Route::post('/projects/{project}/ask', [ChatApiController::class, 'ask']);

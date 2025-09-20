@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('task_files', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('task_id')->index();
-            $table->uuid('file_id')->index();
+            $table->unsignedBigInteger('file_id')->index();
             $table->bigInteger('added_by_id')->index()->comment('references users(id)');
             $table->string('attachment_type')->default('attachment')->comment('attachment | redline | revision');
             $table->text('notes')->nullable();
