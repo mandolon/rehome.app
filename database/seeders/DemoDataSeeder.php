@@ -7,6 +7,8 @@ use App\Models\User;
 use App\Models\Project;
 use App\Models\Document;
 use App\Models\DocumentChunk;
+use App\Models\Task;
+use App\Models\TaskActivity;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -123,6 +125,9 @@ class DemoDataSeeder extends Seeder
 
         // Create sample documents with realistic content
         $this->createSampleDocuments($createdProjects);
+
+        // Create sample tasks for projects
+        $this->createSampleTasks($createdProjects, [$admin, $teamMember, $client]);
 
         $this->command->info('✅ Demo data created successfully!');
         $this->command->info('');
@@ -349,6 +354,195 @@ This Environmental Impact Assessment evaluates the potential environmental effec
                     'demo_data' => true,
                 ],
             ]);
+        }
+    }
+
+    private function createSampleTasks(array $projects, array $users): void
+    {
+        $this->command->info('📋 Creating sample tasks...');
+
+        [$admin, $teamMember, $client] = $users;
+
+        // Sample task templates for preconstruction
+        $taskTemplates = [
+            [
+                'title' => 'Zoning Permit Review',
+                'description' => 'Review and analyze current zoning requirements for the project site. Identify any potential issues or variances needed.',
+                'category' => 'TASK/REDLINE',
+                'due_date' => now()->addDays(5),
+                'allow_client' => true,
+            ],
+            [
+                'title' => 'Building Code Compliance Check',
+                'description' => 'Conduct comprehensive building code analysis for the proposed structure. Document all applicable codes and requirements.',
+                'category' => 'TASK/REDLINE',
+                'due_date' => now()->addDays(7),
+                'allow_client' => true,
+            ],
+            [
+                'title' => 'Site Survey Coordination',
+                'description' => 'Coordinate with surveying team to complete topographical and boundary surveys.',
+                'category' => 'PROGRESS/UPDATE',
+                'due_date' => now()->addDays(10),
+                'allow_client' => false,
+            ],
+            [
+                'title' => 'Environmental Impact Assessment',
+                'description' => 'Review environmental regulations and assess potential impacts. Coordinate with environmental consultants if needed.',
+                'category' => 'TASK/REDLINE',
+                'due_date' => now()->addDays(14),
+                'allow_client' => true,
+            ],
+            [
+                'title' => 'Utility Infrastructure Analysis',
+                'description' => 'Analyze existing utility infrastructure and determine connection requirements for water, sewer, electric, and gas.',
+                'category' => 'PROGRESS/UPDATE',
+                'due_date' => now()->addDays(12),
+                'allow_client' => false,
+            ],
+            [
+                'title' => 'Traffic Impact Study Review',
+                'description' => 'Review traffic patterns and assess impact of proposed development. May require traffic study submission.',
+                'category' => 'TASK/REDLINE',
+                'due_date' => now()->addDays(21),
+                'allow_client' => true,
+            ],
+            [
+                'title' => 'Preliminary Design Review',
+                'description' => 'Review architectural plans for compliance with local design standards and aesthetic guidelines.',
+                'category' => 'PROGRESS/UPDATE',
+                'due_date' => now()->addDays(8),
+                'allow_client' => true,
+            ],
+            [
+                'title' => 'Financial Feasibility Analysis',
+                'description' => 'Complete cost analysis and financial modeling for the proposed development.',
+                'category' => 'PROGRESS/UPDATE',
+                'due_date' => now()->addDays(15),
+                'allow_client' => false,
+            ],
+            [
+                'title' => 'Community Engagement Planning',
+                'description' => 'Plan community outreach and public hearing strategy for project approval process.',
+                'category' => 'TASK/REDLINE',
+                'due_date' => now()->addDays(18),
+                'allow_client' => true,
+            ],
+            [
+                'title' => 'Permit Application Preparation',
+                'description' => 'Compile all required documentation and submit preliminary permit applications.',
+                'category' => 'PROGRESS/UPDATE',
+                'due_date' => now()->addDays(25),
+                'allow_client' => false,
+            ],
+        ];
+
+        $statuses = ['open', 'complete'];
+        $assignees = [$admin->id, $teamMember->id];
+
+        foreach ($projects as $project) {
+            // Create 3-5 tasks per project
+            $numTasks = rand(3, 5);
+            $selectedTasks = array_rand($taskTemplates, $numTasks);
+            
+            // Ensure it's always an array
+            if (!is_array($selectedTasks)) {
+                $selectedTasks = [$selectedTasks];
+            }
+
+            foreach ($selectedTasks as $index) {
+                $taskTemplate = $taskTemplates[$index];
+                $isComplete = rand(0, 3) === 0; // 25% chance of being complete
+                
+                $task = Task::create([
+                    'project_id' => $project->id,
+                    'title' => $taskTemplate['title'],
+                    'description' => $taskTemplate['description'],
+                    'category' => $taskTemplate['category'],
+                    'status' => $isComplete ? 'complete' : 'open',
+                    'assignee_id' => $assignees[array_rand($assignees)],
+                    'created_by_id' => $admin->id,
+                    'due_date' => $taskTemplate['due_date'],
+                    'allow_client' => $taskTemplate['allow_client'],
+                    'created_at' => now()->subDays(rand(1, 30)),
+                ]);
+
+                // Create initial activity
+                TaskActivity::create([
+                    'task_id' => $task->id,
+                    'user_id' => $admin->id,
+                    'action_type' => 'created',
+                    'comment' => 'Task created',
+                    'is_system' => true,
+                    'created_at' => $task->created_at,
+                ]);
+
+                // Add some random activities
+                $this->createTaskActivities($task, $users);
+
+                // If task is complete, add completion activity
+                if ($isComplete) {
+                    TaskActivity::create([
+                        'task_id' => $task->id,
+                        'user_id' => $task->assignee_id,
+                        'action_type' => 'completed',
+                        'comment' => 'Task completed successfully',
+                        'is_system' => true,
+                        'created_at' => now()->subDays(rand(0, 5)),
+                    ]);
+                }
+            }
+        }
+    }
+
+    private function createTaskActivities(Task $task, array $users): void
+    {
+        // Add 1-3 random activities per task
+        $numActivities = rand(1, 3);
+        [$admin, $teamMember, $client] = $users;
+        
+        $activityTypes = [
+            ['type' => 'commented', 'is_system' => false],
+            ['type' => 'updated', 'is_system' => true],
+            ['type' => 'assigned', 'is_system' => true],
+        ];
+
+        $comments = [
+            'Started working on this task',
+            'Need clarification on the requirements',
+            'Progress update: 50% complete',
+            'Waiting for client approval',
+            'Documentation has been updated',
+            'Consulted with external contractor',
+            'Ready for review',
+            'Need additional resources for completion',
+        ];
+
+        for ($i = 0; $i < $numActivities; $i++) {
+            $activity = $activityTypes[array_rand($activityTypes)];
+            $user = $users[array_rand($users)];
+            
+            // Don't let clients create system activities
+            if ($user->isClient() && $activity['is_system']) {
+                continue;
+            }
+
+            $comment = $activity['is_system'] ? 
+                       'Task updated by ' . $user->name :
+                       $comments[array_rand($comments)];
+
+            TaskActivity::create([
+                'task_id' => $task->id,
+                'user_id' => $user->id,
+                'action_type' => $activity['type'],
+                'comment' => $comment,
+                'is_system' => $activity['is_system'],
+                'created_at' => now()->subDays(rand(0, 20)),
+            ]);
+
+            if (!$activity['is_system']) {
+                $task->increment('comments_count');
+            }
         }
     }
 

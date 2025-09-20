@@ -44,6 +44,21 @@ class User extends Authenticatable
         return $this->hasMany(Project::class, 'user_id');
     }
 
+    public function assignedTasks(): HasMany
+    {
+        return $this->hasMany(Task::class, 'assignee_id');
+    }
+
+    public function createdTasks(): HasMany
+    {
+        return $this->hasMany(Task::class, 'created_by_id');
+    }
+
+    public function taskActivities(): HasMany
+    {
+        return $this->hasMany(TaskActivity::class);
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === 'admin';

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthApiController;
 use App\Http\Controllers\Api\ProjectApiController;
+use App\Http\Controllers\Api\TaskApiController;
 use App\Http\Controllers\Api\ChatApiController;
 use App\Http\Controllers\Api\DocApiController;
 use App\Http\Controllers\Api\FileApiController;
@@ -48,6 +49,16 @@ Route::prefix('v1')->group(function () {
 
         // Projects CRUD
         Route::apiResource('projects', ProjectApiController::class);
+        
+        // Tasks CRUD
+        Route::apiResource('tasks', TaskApiController::class);
+        
+        // Task-specific actions
+        Route::post('/tasks/{task}/complete', [TaskApiController::class, 'complete']);
+        Route::post('/tasks/{task}/assign', [TaskApiController::class, 'assign']);
+        Route::post('/tasks/{task}/comments', [TaskApiController::class, 'addComment']);
+        Route::post('/tasks/{task}/files', [TaskApiController::class, 'attachFile']);
+        Route::delete('/tasks/{task}/files/{file}', [TaskApiController::class, 'detachFile']);
         
         // Project-specific endpoints
         Route::post('/projects/{project}/ask', [ChatApiController::class, 'ask']);
