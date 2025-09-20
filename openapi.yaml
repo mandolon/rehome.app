@@ -2,7 +2,17 @@ openapi: 3.0.3
 info:
   title: Rehome App API
   version: 1.0.0
-  description: API-first preconstruction platform focusing on design, permit, and building workflows
+  description: |
+    API-first preconstruction platform focusing on design, permit, and building workflows.
+    
+    ## Rate Limiting
+    - Login endpoints: 5 requests per minute per IP
+    - General API endpoints: 120 requests per minute per authenticated user
+    - Rate limit headers included in responses
+    
+    ## Authentication
+    Uses Laravel Sanctum token-based authentication. Include the token in the Authorization header:
+    `Authorization: Bearer {token}`
   contact:
     name: API Support
     email: support@rehome.app
@@ -17,6 +27,7 @@ paths:
   /health:
     get:
       summary: Health check
+      description: Check if the system is healthy and operational
       tags: [System]
       responses:
         '200':
@@ -26,13 +37,49 @@ paths:
               schema:
                 type: object
                 properties:
-                  status: { type: string, example: ok }
+                  ok: { type: boolean, example: true }
+                  status: { type: string, example: "healthy" }
                   timestamp: { type: string, format: date-time }
                   version: { type: string, example: "1.0.0" }
+                  checks:
+                    type: object
+                    properties:
+                      database: { type: string, example: "ok" }
+                      redis: { type: string, example: "ok" }
+
+  /ready:
+    get:
+      summary: Readiness check
+      description: Check if the system is ready to serve requests (includes migrations)
+      tags: [System]
+      responses:
+        '200':
+          description: System is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  status: { type: string, example: "ready" }
+                  checks:
+                    type: object
+                    properties:
+                      database: { type: string, example: "ok" }
+                      migrations: { type: string, example: "up-to-date" }
+        '503':
+          description: System not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /login:
     post:
       summary: Login and get authentication token
+      description: |
+        Authenticate user and receive access token for API requests.
+        Rate limited to 5 attempts per minute per IP address.
       tags: [Authentication]
       requestBody:
         required: true
@@ -48,22 +95,39 @@ paths:
       responses:
         '200':
           description: Login successful
+          headers:
+            X-RateLimit-Limit:
+              description: Request limit per minute
+              schema: { type: integer, example: 5 }
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema: { type: integer, example: 4 }
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  user: { $ref: '#/components/schemas/User' }
-                  token: { type: string, example: "1|abc123..." }
+                  ok: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/User' }
+                      token: { type: string, example: "1|abc123..." }
         '422':
-          description: Invalid credentials
+          description: Invalid credentials or validation errors
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   /me:
     get:
       summary: Get current user information
+      description: Retrieve authenticated user profile and role information
       tags: [Authentication]
       security: [{ bearerAuth: [] }]
       responses:
@@ -74,16 +138,21 @@ paths:
               schema:
                 type: object
                 properties:
-                  user: { $ref: '#/components/schemas/User' }
+                  ok: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/User' }
         '401':
-          description: Unauthorized
+          description: Unauthorized - invalid or missing token
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   /logout:
     post:
       summary: Logout and revoke token
+      description: Revoke the current authentication token
       tags: [Authentication]
       security: [{ bearerAuth: [] }]
       responses:
@@ -94,11 +163,17 @@ paths:
               schema:
                 type: object
                 properties:
+                  ok: { type: boolean, example: true }
                   message: { type: string, example: "Logged out successfully" }
 
   /projects:
     get:
       summary: List projects (role-scoped)
+      description: |
+        Retrieve projects based on user role:
+        - Admin: All projects in account
+        - Team: Projects they can access
+        - Client: Projects they're assigned to
       tags: [Projects]
       security: [{ bearerAuth: [] }]
       parameters:
@@ -109,23 +184,38 @@ paths:
           name: per_page
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
         - in: query
-          name: status
-          schema: { type: string, enum: [active, inactive, archived] }
+          name: q
+          description: Search projects by name
+          schema: { type: string, example: "downtown" }
       responses:
         '200':
-          description: List of projects
+          description: List of projects with pagination
+          headers:
+            X-RateLimit-Limit:
+              description: API request limit per minute
+              schema: { type: integer, example: 120 }
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema: { type: integer, example: 119 }
           content:
             application/json:
               schema:
                 type: object
                 properties:
+                  ok: { type: boolean, example: true }
                   data: 
                     type: array
                     items: { $ref: '#/components/schemas/Project' }
                   meta: { $ref: '#/components/schemas/PaginationMeta' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
     post:
       summary: Create new project (admin/team only)
+      description: Create a new project. Requires admin or team role permissions.
       tags: [Projects]
       security: [{ bearerAuth: [] }]
       requestBody:
@@ -138,32 +228,46 @@ paths:
               properties:
                 name: { type: string, example: "Downtown Adoption Center" }
                 description: { type: string, example: "Main adoption facility downtown" }
-                status: { type: string, enum: [active, inactive], default: active }
+                phase: { type: string, example: "Design" }
+                zoning: { type: string, example: "R-2 Residential" }
       responses:
         '201':
-          description: Project created
+          description: Project created successfully
           content:
             application/json:
               schema:
                 type: object
                 properties:
+                  ok: { type: boolean, example: true }
                   data: { $ref: '#/components/schemas/Project' }
                   message: { type: string, example: "Project created successfully" }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         '403':
           description: Forbidden - insufficient permissions
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   /projects/{id}:
     get:
       summary: Get project details
+      description: Retrieve detailed project information including related data
       tags: [Projects]
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
           name: id
           required: true
+          description: Project ID
           schema: { type: string }
       responses:
         '200':
@@ -173,21 +277,34 @@ paths:
               schema:
                 type: object
                 properties:
+                  ok: { type: boolean, example: true }
                   data: { $ref: '#/components/schemas/ProjectDetail' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden - no access to this project
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         '404':
           description: Project not found
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
     patch:
       summary: Update project
+      description: Update project information. Requires appropriate permissions based on role.
       tags: [Projects]
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
           name: id
           required: true
+          description: Project ID
           schema: { type: string }
       requestBody:
         content:
@@ -195,53 +312,56 @@ paths:
             schema:
               type: object
               properties:
-                name: { type: string }
+                name: { type: string, example: "Updated Project Name" }
                 description: { type: string }
-                status: { type: string, enum: [active, inactive, archived] }
+                phase: { type: string, example: "Construction" }
+                zoning: { type: string, example: "Commercial" }
       responses:
         '200':
-          description: Project updated
+          description: Project updated successfully
           content:
             application/json:
               schema:
                 type: object
                 properties:
+                  ok: { type: boolean, example: true }
                   data: { $ref: '#/components/schemas/Project' }
                   message: { type: string, example: "Project updated successfully" }
-
-    delete:
-      summary: Delete project (admin only)
-      tags: [Projects]
-      security: [{ bearerAuth: [] }]
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: Project deleted
+        '401':
+          description: Unauthorized
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  message: { type: string, example: "Project deleted successfully" }
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         '403':
-          description: Forbidden - admin access required
+          description: Forbidden - insufficient permissions
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Validation errors
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   /projects/{id}/ask:
     post:
       summary: Ask question about project documents (RAG)
+      description: |
+        Ask questions about project documents using RAG (Retrieval-Augmented Generation).
+        The system will search through document embeddings and provide AI-generated answers
+        with citations to source documents.
       tags: [RAG]
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
           name: id
           required: true
+          description: Project ID
           schema: { type: string }
       requestBody:
         required: true
@@ -249,41 +369,70 @@ paths:
           application/json:
             schema:
               type: object
-              required: [question]
+              required: [message]
               properties:
-                question: { type: string, example: "What are the adoption requirements?" }
-                context_limit: { type: integer, minimum: 1, maximum: 10, default: 3 }
+                message: 
+                  type: string
+                  maxLength: 2000
+                  example: "What are the zoning requirements for this project?"
+                  description: "Question about the project documents"
       responses:
         '200':
-          description: AI-generated answer
+          description: AI-generated answer with citations
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  data:
-                    type: object
-                    properties:
-                      answer: { type: string, example: "Based on the documents..." }
-                      sources: 
-                        type: array
-                        items: { $ref: '#/components/schemas/Source' }
-                      confidence: { type: number, format: float, example: 85.5 }
-        '500':
-          description: Processing error
+                  ok: { type: boolean, example: true }
+                  answer: 
+                    type: string
+                    example: "Based on the zoning documents, this project requires a minimum setback of 25 feet from the front property line and must comply with R-2 residential zoning standards."
+                  citations:
+                    type: array
+                    items: { $ref: '#/components/schemas/Citation' }
+                    description: "Source document references for the answer"
+        '401':
+          description: Unauthorized
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden - no access to this project
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Insufficient context or validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: false }
+                  message: 
+                    type: string
+                    example: "Insufficient context available in project documents to answer your question."
+        '500':
+          description: Processing error (e.g., OpenAI API failure)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   /projects/{id}/docs:
     post:
       summary: Upload documents for processing
+      description: |
+        Upload documents to a project for RAG processing. Files will be automatically
+        processed for text extraction, chunking (~900 tokens), and embedding generation.
+        Supported formats: PDF, DOC, DOCX, TXT, MD. Max 5 files, 10MB each.
       tags: [Documents]
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
           name: id
           required: true
+          description: Project ID
           schema: { type: string }
       requestBody:
         required: true
@@ -295,72 +444,141 @@ paths:
               properties:
                 files:
                   type: array
-                  items: { type: string, format: binary }
+                  items: 
+                    type: string
+                    format: binary
+                  minItems: 1
                   maxItems: 5
+                  description: "Document files to upload (PDF, DOC, DOCX, TXT, MD)"
       responses:
         '201':
-          description: Documents uploaded
+          description: Documents uploaded and queued for processing
           content:
             application/json:
               schema:
                 type: object
                 properties:
+                  ok: { type: boolean, example: true }
                   data:
                     type: array
                     items: { $ref: '#/components/schemas/DocumentUpload' }
-                  message: { type: string, example: "3 document(s) uploaded and queued for processing" }
+                  message: 
+                    type: string
+                    example: "3 document(s) uploaded and queued for processing"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden - no upload permission for this project
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: File validation errors
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   /files/{id}:
     get:
       summary: Get file metadata and signed download URL
+      description: |
+        Retrieve file metadata and generate a signed URL for secure download.
+        The signed URL expires after 15 minutes for security.
       tags: [Files]
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
           name: id
           required: true
+          description: File ID
           schema: { type: string }
       responses:
         '200':
-          description: File information with download URL
+          description: File information with signed download URL
           content:
             application/json:
               schema:
                 type: object
                 properties:
+                  ok: { type: boolean, example: true }
                   data: { $ref: '#/components/schemas/FileDownload' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden - no access to this file
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   /files/{id}/download:
     get:
       summary: Download file (signed URL endpoint)
+      description: |
+        Download file using signed URL. This endpoint validates the signature
+        and serves the file content directly. URLs expire after 15 minutes.
       tags: [Files]
       parameters:
         - in: path
           name: id
           required: true
+          description: File ID
           schema: { type: string }
         - in: query
           name: signature
           required: true
+          description: Signed URL signature for security
+          schema: { type: string }
+        - in: query
+          name: expires
+          required: true
+          description: Expiration timestamp
           schema: { type: string }
       responses:
         '200':
           description: File content
           content:
             application/octet-stream:
-              schema: { type: string, format: binary }
+              schema: 
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
         '403':
-          description: Invalid or expired signature
+          description: Invalid, expired, or missing signature
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Error' }
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
+      bearerFormat: Token
+      description: |
+        Laravel Sanctum token authentication. Include the token in the Authorization header:
+        `Authorization: Bearer {your-token-here}`
 
   schemas:
     User:
@@ -371,14 +589,18 @@ components:
         email: { type: string, format: email, example: "john@example.com" }
         role: { type: string, enum: [admin, team, client], example: "client" }
         account_id: { type: string, example: "1" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     Project:
       type: object
       properties:
         id: { type: string, example: "1" }
         name: { type: string, example: "Downtown Adoption Center" }
-        description: { type: string, example: "Main adoption facility" }
-        status: { type: string, enum: [active, inactive, archived] }
+        description: { type: string, example: "Main adoption facility downtown" }
+        phase: { type: string, example: "Design", nullable: true }
+        zoning: { type: string, example: "R-2 Residential", nullable: true }
+        account_id: { type: string, example: "1" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -387,37 +609,44 @@ components:
         - $ref: '#/components/schemas/Project'
         - type: object
           properties:
-            owner: { $ref: '#/components/schemas/User' }
             documents_count: { type: integer, example: 5 }
-            processed_documents_count: { type: integer, example: 3 }
+            completed_documents_count: { type: integer, example: 3 }
+            pending_documents_count: { type: integer, example: 1 }
+            failed_documents_count: { type: integer, example: 1 }
 
     DocumentUpload:
       type: object
       properties:
         id: { type: string, example: "1" }
-        name: { type: string, example: "adoption-policy.pdf" }
-        size: { type: integer, example: 2048576 }
-        status: { type: string, enum: [pending, processing, completed, failed] }
+        name: { type: string, example: "zoning-requirements.pdf" }
+        size: { type: integer, example: 2048576, description: "File size in bytes" }
+        status: { type: string, enum: [pending, processing, completed, failed], example: "pending" }
+        job_id: { type: string, example: "job_abc123", description: "Processing job identifier" }
 
     FileDownload:
       type: object
       properties:
         id: { type: string, example: "1" }
-        name: { type: string, example: "document.pdf" }
+        name: { type: string, example: "building-permit.pdf" }
+        original_name: { type: string, example: "Building Permit Application.pdf" }
         mime_type: { type: string, example: "application/pdf" }
-        size: { type: integer, example: 1024000 }
-        download_url: { type: string, format: uri, example: "https://api.rehome.app/api/files/1/download?signature=..." }
-        metadata: { type: object }
+        size: { type: integer, example: 1024000, description: "File size in bytes" }
+        download_url: 
+          type: string
+          format: uri
+          example: "https://api.rehome.app/api/v1/files/1/download?signature=abc123&expires=1234567890"
+          description: "Signed URL valid for 15 minutes"
+        metadata: 
+          type: object
+          example: { "uploaded_by": "1", "uploaded_at": "2024-01-01T00:00:00.000000Z" }
         created_at: { type: string, format: date-time }
 
-    Source:
+    Citation:
       type: object
+      description: Reference to source document and chunk for answer citations
       properties:
-        document_name: { type: string, example: "adoption-policy.pdf" }
-        document_id: { type: string, example: "1" }
-        chunk_index: { type: integer, example: 2 }
-        similarity: { type: number, format: float, example: 0.85 }
-        snippet: { type: string, example: "Adoption requirements include..." }
+        doc_id: { type: integer, example: 123, description: "Source document ID" }
+        chunk_no: { type: integer, example: 2, description: "Chunk index within document" }
 
     PaginationMeta:
       type: object
@@ -426,13 +655,35 @@ components:
         last_page: { type: integer, example: 5 }
         per_page: { type: integer, example: 20 }
         total: { type: integer, example: 95 }
+        from: { type: integer, example: 1, nullable: true }
+        to: { type: integer, example: 20, nullable: true }
+        path: { type: string, example: "http://localhost:8000/api/v1/projects" }
 
-    Error:
+    ErrorResponse:
       type: object
+      description: Standard error response format
       properties:
         ok: { type: boolean, example: false }
-        error: { type: string, example: "ValidationException" }
+        error: { type: string, example: "ValidationException", description: "Error type/class" }
         message: { type: string, example: "The given data was invalid." }
+        errors: 
+          type: object
+          description: "Field-specific validation errors (422 responses only)"
+          example: { "email": ["The email field is required."] }
+
+    # Deprecated - kept for compatibility
+    Error:
+      $ref: '#/components/schemas/ErrorResponse'
+
+    # Deprecated - kept for compatibility  
+    Source:
+      type: object
+      properties:
+        document_name: { type: string, example: "zoning-requirements.pdf" }
+        document_id: { type: string, example: "1" }
+        chunk_index: { type: integer, example: 2 }
+        similarity: { type: number, format: float, example: 0.85 }
+        snippet: { type: string, example: "Zoning requirements include..." }
 
 tags:
   - name: System
