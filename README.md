@@ -109,9 +109,9 @@ routes/api.php               # API routes
    OPENAI_API_KEY=your_openai_api_key
    ```
 
-6. **Run migrations**:
+6. **Run migrations and seed demo data**:
    ```bash
-   php artisan migrate
+   php artisan migrate --seed
    ```
 
 7. **Start development servers**:
@@ -119,9 +119,157 @@ routes/api.php               # API routes
    # Laravel backend
    php artisan serve
    
-   # Vite frontend
+   # Vite frontend (in separate terminal)
    npm run dev
    ```
+
+## 🧪 Demo Data & Testing
+
+After seeding, you'll have realistic preconstruction demo data ready for testing:
+
+### 📋 Demo Accounts
+- **Apex Construction Group** - Enterprise account with admin and team users
+- **Urban Development Partners** - Pro account with client user
+
+### 🔐 Demo Credentials
+```
+Admin:  admin@apex-construction.com / password
+Team:   team@apex-construction.com / password  
+Client: client@urban-dev.com / password
+```
+
+### 🏗️ Demo Projects
+1. **Downtown Mixed-Use Development** - Permitting phase, MU-3 zoning
+2. **Riverside Residential Complex** - Design Development phase, R-4 zoning
+3. **Tech Campus Expansion** - Schematic Design phase, C-2 zoning
+
+Each project includes realistic documents with embedded content for RAG testing.
+
+### 🔄 API Testing with cURL
+
+#### 1. Authentication
+```bash
+# Login to get token
+curl -X POST http://localhost:8000/api/v1/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@apex-construction.com",
+    "password": "password"
+  }'
+
+# Response: { "ok": true, "data": { "user": {...}, "token": "1|abc123..." } }
+```
+
+#### 2. Projects Management
+```bash
+# Set your token
+export TOKEN="1|your-token-from-login"
+
+# List projects (with search)
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/projects?q=downtown&per_page=10"
+
+# Get project details
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/projects/1"
+
+# Create new project (admin/team only)
+curl -X POST http://localhost:8000/api/v1/projects \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "New Office Building",
+    "description": "Corporate headquarters with parking",
+    "phase": "Feasibility Study",
+    "zoning": "C-1 Commercial"
+  }'
+
+# Update project
+curl -X PATCH http://localhost:8000/api/v1/projects/1 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phase": "Construction Documents",
+    "description": "Updated project scope"
+  }'
+```
+
+#### 3. Document Upload & RAG
+```bash
+# Upload documents for processing
+curl -X POST http://localhost:8000/api/v1/projects/1/docs \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "files[]=@/path/to/zoning-report.pdf" \
+  -F "files[]=@/path/to/building-plans.dwg"
+
+# Ask questions about project documents (RAG)
+curl -X POST http://localhost:8000/api/v1/projects/1/ask \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "What are the setback requirements for this project?"
+  }'
+
+# Response: {
+#   "ok": true,
+#   "answer": "Based on the zoning documents, the setback requirements are...",
+#   "citations": [
+#     {"doc_id": 123, "chunk_no": 2},
+#     {"doc_id": 124, "chunk_no": 0}
+#   ]
+# }
+```
+
+#### 4. File Management
+```bash
+# Get file metadata and signed download URL
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/files/1"
+
+# Response includes download_url with 15-minute signature:
+# { "ok": true, "data": { "download_url": "http://localhost:8000/api/v1/files/1/download?signature=..." } }
+
+# Download file using signed URL (no auth needed)
+curl -o downloaded-file.pdf \
+  "http://localhost:8000/api/v1/files/1/download?signature=abc123&expires=1234567890"
+```
+
+#### 5. Health Checks
+```bash
+# System health check
+curl "http://localhost:8000/api/v1/health"
+
+# Readiness check (includes database/migrations)
+curl "http://localhost:8000/api/v1/ready"
+```
+
+#### 6. User Management
+```bash
+# Get current user profile
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/me"
+
+# Logout (revokes token)
+curl -X POST http://localhost:8000/api/v1/logout \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 🧪 Rate Limiting Examples
+```bash
+# Login attempts (5 per minute per IP)
+for i in {1..6}; do
+  curl -X POST http://localhost:8000/api/v1/login \
+    -H "Content-Type: application/json" \
+    -d '{"email": "wrong@email.com", "password": "wrong"}'
+done
+# 6th attempt returns: { "ok": false, "message": "Too Many Requests" } with 429 status
+
+# API requests (120 per minute per authenticated user)
+# Watch for X-RateLimit-Remaining header in responses
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/projects" \
+  -I | grep -i ratelimit
+```
 
 ## 🎨 Design System
 
@@ -170,9 +318,62 @@ Run the test suite:
 
 ## 📝 API Documentation
 
-- Health check: `GET /api/health`
-- All authenticated endpoints require `Authorization: Bearer {token}` header
-- Responses follow consistent JSON structure with `data`, `meta`, and `message` fields
+### Response Format
+All API responses follow a consistent envelope structure:
+
+**Success Response (2xx)**:
+```json
+{
+  "ok": true,
+  "data": { /* response payload */ },
+  "meta": { /* pagination/metadata */ },
+  "message": "Optional success message"
+}
+```
+
+**Error Response (4xx/5xx)**:
+```json
+{
+  "ok": false,
+  "error": "ValidationException",
+  "message": "The given data was invalid.",
+  "errors": {
+    "email": ["The email field is required."]
+  }
+}
+```
+
+### Common HTTP Status Codes
+- **200 OK** - Successful request
+- **201 Created** - Resource created successfully  
+- **401 Unauthorized** - Missing or invalid authentication token
+- **403 Forbidden** - User lacks permission for this action
+- **422 Unprocessable Entity** - Validation errors or insufficient context (RAG)
+- **429 Too Many Requests** - Rate limit exceeded
+- **500 Internal Server Error** - Server error (logged for debugging)
+
+### Rate Limiting
+- **Login endpoints**: 5 attempts per minute per IP address
+- **Authenticated API**: 120 requests per minute per user
+- Rate limit headers included: `X-RateLimit-Limit`, `X-RateLimit-Remaining`
+
+### Authentication
+- **Web**: Session-based authentication via login form
+- **API/Mobile**: Token-based with `Authorization: Bearer {token}` header
+- **Tokens**: Generated via `/api/v1/login`, revoked via `/api/v1/logout`
+
+### File Uploads
+- **Supported formats**: PDF, DOC, DOCX, TXT, MD
+- **Size limit**: 10MB per file, 5 files per request
+- **Processing**: Files are queued for text extraction, chunking, and embedding
+
+### RAG (Retrieval-Augmented Generation)
+- **Model**: GPT-4o with preconstruction-focused system prompt
+- **Embeddings**: OpenAI text-embedding-3-small (1536 dimensions)
+- **Context**: Top 12 most relevant document chunks (0.6+ similarity)
+- **Citations**: Returns `doc_id` and `chunk_no` for source verification
+
+For complete API specification, see `openapi.yaml` in the project root.
 
 ## 🚧 Next Steps
 
