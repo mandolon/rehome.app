@@ -36,7 +36,7 @@ beforeEach(function () {
 
 describe('Authentication', function () {
     it('can login with valid credentials', function () {
-        $response = $this->postJson('/api/login', [
+        $response = $this->postJson('/api/v1/login', [
             'email' => $this->admin->email,
             'password' => 'password',
             'device_name' => 'test-device',
@@ -64,7 +64,7 @@ describe('Authentication', function () {
     });
 
     it('rejects invalid credentials', function () {
-        $response = $this->postJson('/api/login', [
+        $response = $this->postJson('/api/v1/login', [
             'email' => $this->admin->email,
             'password' => 'wrong-password',
         ]);
@@ -76,7 +76,7 @@ describe('Authentication', function () {
         $token = $this->admin->createToken('test')->plainTextToken;
 
         $response = $this->withHeader('Authorization', "Bearer $token")
-            ->getJson('/api/me');
+            ->getJson('/api/v1/me');
 
         $response->assertOk()
             ->assertJson([
@@ -92,7 +92,7 @@ describe('Authentication', function () {
     });
 
     it('rejects requests without token', function () {
-        $response = $this->getJson('/api/me');
+        $response = $this->getJson('/api/v1/me');
         $response->assertStatus(401);
     });
 
@@ -100,14 +100,14 @@ describe('Authentication', function () {
         $token = $this->admin->createToken('test')->plainTextToken;
 
         $response = $this->withHeader('Authorization', "Bearer $token")
-            ->postJson('/api/logout');
+            ->postJson('/api/v1/logout');
 
         $response->assertOk()
             ->assertJson(['ok' => true]);
 
         // Token should now be invalid
         $response = $this->withHeader('Authorization', "Bearer $token")
-            ->getJson('/api/me');
+            ->getJson('/api/v1/me');
 
         $response->assertStatus(401);
     });
@@ -118,7 +118,7 @@ describe('Projects API', function () {
         $token = $this->admin->createToken('test')->plainTextToken;
 
         $response = $this->withHeader('Authorization', "Bearer $token")
-            ->postJson('/api/projects', [
+            ->postJson('/api/v1/projects', [
                 'name' => 'Test Project',
                 'description' => 'A test project',
                 'status' => 'active',
@@ -143,7 +143,7 @@ describe('Projects API', function () {
         $token = $this->team->createToken('test')->plainTextToken;
 
         $response = $this->withHeader('Authorization', "Bearer $token")
-            ->postJson('/api/projects', [
+            ->postJson('/api/v1/projects', [
                 'name' => 'Team Project',
                 'description' => 'A project by team member',
             ]);
@@ -155,7 +155,7 @@ describe('Projects API', function () {
         $token = $this->client->createToken('test')->plainTextToken;
 
         $response = $this->withHeader('Authorization', "Bearer $token")
-            ->postJson('/api/projects', [
+            ->postJson('/api/v1/projects', [
                 'name' => 'Client Project',
                 'description' => 'Should not be allowed',
             ]);
@@ -173,7 +173,7 @@ describe('Projects API', function () {
         $token = $this->admin->createToken('test')->plainTextToken;
 
         $response = $this->withHeader('Authorization', "Bearer $token")
-            ->getJson('/api/projects?per_page=10');
+            ->getJson('/api/v1/projects?per_page=10');
 
         $response->assertOk()
             ->assertJsonStructure([
@@ -208,7 +208,7 @@ describe('Projects API', function () {
 
         // Should not see other account's projects
         $response = $this->withHeader('Authorization', "Bearer $token")
-            ->getJson('/api/projects');
+            ->getJson('/api/v1/projects');
 
         $response->assertOk();
         
@@ -231,7 +231,7 @@ describe('Projects API', function () {
         $token = $this->client->createToken('test')->plainTextToken;
 
         $response = $this->withHeader('Authorization', "Bearer $token")
-            ->getJson('/api/projects');
+            ->getJson('/api/v1/projects');
 
         $response->assertOk();
         
@@ -248,7 +248,7 @@ describe('Rate Limiting', function () {
         // Make many requests quickly
         for ($i = 0; $i < 125; $i++) {
             $response = $this->withHeader('Authorization', "Bearer $token")
-                ->getJson('/api/me');
+                ->getJson('/api/v1/me');
 
             if ($response->status() === 429) {
                 expect($i)->toBeGreaterThan(120); // Should hit limit after 120 requests
@@ -262,7 +262,7 @@ describe('Rate Limiting', function () {
     it('enforces auth rate limits', function () {
         // Make many login attempts
         for ($i = 0; $i < 10; $i++) {
-            $response = $this->postJson('/api/login', [
+            $response = $this->postJson('/api/v1/login', [
                 'email' => 'test@example.com',
                 'password' => 'wrong',
             ]);
@@ -279,7 +279,7 @@ describe('Rate Limiting', function () {
 
 describe('Error Handling', function () {
     it('returns consistent error format', function () {
-        $response = $this->getJson('/api/projects/999999');
+        $response = $this->getJson('/api/v1/projects/999999');
 
         $response->assertStatus(404)
             ->assertJsonStructure([
@@ -297,7 +297,7 @@ describe('Error Handling', function () {
         $token = $this->admin->createToken('test')->plainTextToken;
 
         $response = $this->withHeader('Authorization', "Bearer $token")
-            ->postJson('/api/projects', []); // Missing required 'name' field
+            ->postJson('/api/v1/projects', []); // Missing required 'name' field
 
         $response->assertStatus(422)
             ->assertJsonStructure([
