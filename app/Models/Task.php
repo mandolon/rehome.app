@@ -70,6 +70,11 @@ class Task extends Model
         return $this->belongsTo(User::class, 'created_by_id');
     }
 
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_id');
+    }
+
     public function files(): BelongsToMany
     {
         return $this->belongsToMany(File::class, 'task_files')
@@ -84,6 +89,11 @@ class Task extends Model
     }
 
     public function activities(): HasMany
+    {
+        return $this->hasMany(TaskActivity::class)->orderBy('created_at', 'desc');
+    }
+
+    public function activity(): HasMany
     {
         return $this->hasMany(TaskActivity::class)->orderBy('created_at', 'desc');
     }
@@ -205,7 +215,7 @@ class Task extends Model
             'is_system' => true,
         ]);
 
-        $this->increment('files_count');
+        // files_count will be incremented automatically by TaskFile model events
 
         return $taskFile;
     }

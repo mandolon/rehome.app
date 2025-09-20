@@ -40,6 +40,16 @@ class TaskFile extends Model
                 $model->id = Str::uuid()->toString();
             }
         });
+
+        // Increment tasks.files_count when creating
+        static::created(function ($taskFile) {
+            $taskFile->task()->increment('files_count');
+        });
+
+        // Decrement tasks.files_count when deleting
+        static::deleted(function ($taskFile) {
+            $taskFile->task()->decrement('files_count');
+        });
     }
 
     // Relationships

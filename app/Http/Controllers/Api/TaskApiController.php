@@ -368,7 +368,7 @@ class TaskApiController extends Controller
             'is_system' => true,
         ]);
 
-        $task->decrement('files_count');
+        // files_count will be decremented automatically by TaskFile model events
 
         return Api::success(null, 'File detached successfully');
     }
