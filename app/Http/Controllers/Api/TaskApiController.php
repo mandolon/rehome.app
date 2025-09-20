@@ -10,7 +10,6 @@ use App\Support\Api;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\Gate;
 
 class TaskApiController extends Controller
 {
@@ -99,8 +98,8 @@ class TaskApiController extends Controller
         $user = $request->user();
         $project = Project::findOrFail($validated['project_id']);
 
-        // Authorization check
-        if (!Gate::allows('manage-tasks', $project)) {
+        // Authorization check using TaskPolicy
+        if (!$user->can('create', [Task::class, $project])) {
             return Api::error('Unauthorized', 403);
         }
 
@@ -153,8 +152,8 @@ class TaskApiController extends Controller
 
         $user = request()->user();
 
-        // Authorization check
-        if (!Gate::allows('view-task', $task)) {
+        // Authorization check using TaskPolicy
+        if (!$user->can('view', $task)) {
             return Api::error('Unauthorized', 403);
         }
 
@@ -166,8 +165,8 @@ class TaskApiController extends Controller
         $task = Task::findOrFail($id);
         $user = $request->user();
 
-        // Authorization check
-        if (!Gate::allows('manage-tasks', $task->project)) {
+        // Authorization check using TaskPolicy
+        if (!$user->can('update', $task)) {
             return Api::error('Unauthorized', 403);
         }
 
@@ -228,8 +227,8 @@ class TaskApiController extends Controller
         $task = Task::findOrFail($id);
         $user = request()->user();
 
-        // Authorization check
-        if (!Gate::allows('manage-tasks', $task->project)) {
+        // Authorization check using TaskPolicy
+        if (!$user->can('delete', $task)) {
             return Api::error('Unauthorized', 403);
         }
 
@@ -243,8 +242,8 @@ class TaskApiController extends Controller
         $task = Task::findOrFail($id);
         $user = $request->user();
 
-        // Authorization check - assignee or team member can complete
-        if (!Gate::allows('complete-task', $task)) {
+        // Authorization check using TaskPolicy - assignee or team member can complete
+        if (!$user->can('complete', $task)) {
             return Api::error('Unauthorized', 403);
         }
 
@@ -264,8 +263,8 @@ class TaskApiController extends Controller
         $task = Task::findOrFail($id);
         $user = $request->user();
 
-        // Authorization check
-        if (!Gate::allows('manage-tasks', $task->project)) {
+        // Authorization check using TaskPolicy
+        if (!$user->can('update', $task)) {
             return Api::error('Unauthorized', 403);
         }
 
@@ -291,8 +290,8 @@ class TaskApiController extends Controller
         $task = Task::findOrFail($id);
         $user = $request->user();
 
-        // Authorization check
-        if (!Gate::allows('view-task', $task)) {
+        // Authorization check using TaskPolicy
+        if (!$user->can('comment', $task)) {
             return Api::error('Unauthorized', 403);
         }
 
@@ -314,8 +313,8 @@ class TaskApiController extends Controller
         $task = Task::findOrFail($id);
         $user = $request->user();
 
-        // Authorization check
-        if (!Gate::allows('manage-tasks', $task->project)) {
+        // Authorization check using TaskPolicy
+        if (!$user->can('attachFile', $task)) {
             return Api::error('Unauthorized', 403);
         }
 
@@ -343,8 +342,8 @@ class TaskApiController extends Controller
         $task = Task::findOrFail($id);
         $user = $request->user();
 
-        // Authorization check
-        if (!Gate::allows('manage-tasks', $task->project)) {
+        // Authorization check using TaskPolicy
+        if (!$user->can('attachFile', $task)) {
             return Api::error('Unauthorized', 403);
         }
 
