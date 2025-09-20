@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\ProjectApiController;
 use App\Http\Controllers\Api\ChatApiController;
 use App\Http\Controllers\Api\DocApiController;
 use App\Http\Controllers\Api\FileApiController;
+use App\Http\Controllers\Api\HealthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -19,17 +20,16 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// Health check endpoint (public)
-Route::get('/health', function () {
-    return response()->json([
-        'status' => 'ok',
-        'timestamp' => now()->toISOString(),
-        'version' => '1.0.0',
-    ]);
-});
+// Health check endpoints (public)
+Route::get('/health', [HealthController::class, 'health']);
+Route::get('/ready', [HealthController::class, 'ready']);
 
 // API Version 1
 Route::prefix('v1')->group(function () {
+    // Health endpoints
+    Route::get('/health', [HealthController::class, 'health']);
+    Route::get('/ready', [HealthController::class, 'ready']);
+
     // Public authentication routes
     Route::middleware('throttle:login')->group(function () {
         Route::post('/login', [AuthApiController::class, 'login']);
