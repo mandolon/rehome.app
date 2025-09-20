@@ -17,6 +17,11 @@ class ProjectApiController extends Controller
             ->where('account_id', $user->account_id)
             ->with(['account', 'owner']);
 
+        // Search functionality
+        if ($search = $request->get('q')) {
+            $query->where('name', 'like', "%{$search}%");
+        }
+
         // Role-based filtering
         if ($user->role === 'client') {
             // Clients can only see projects they own or are assigned to
@@ -28,16 +33,22 @@ class ProjectApiController extends Controller
             });
         }
 
-        $projects = $query->paginate($request->get('per_page', 20));
+        // Ordering
+        $query->orderBy('updated_at', 'desc');
+
+        $perPage = min($request->get('per_page', 20), 50); // Max 50 per page
+        $projects = $query->paginate($perPage);
 
         return response()->json([
+            'ok' => true,
             'data' => $projects->items(),
             'meta' => [
-                'current_page' => $projects->currentPage(),
-                'last_page' => $projects->lastPage(),
-                'per_page' => $projects->perPage(),
+                'page' => $projects->currentPage(),
+                'perPage' => $projects->perPage(),
                 'total' => $projects->total(),
+                'lastPage' => $projects->lastPage(),
             ],
+        ]);
         ]);
     }
 

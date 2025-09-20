@@ -19,6 +19,8 @@ class ProjectFactory extends Factory
             'name' => $this->faker->sentence(3),
             'description' => $this->faker->paragraph(2),
             'status' => $this->faker->randomElement(['active', 'inactive', 'archived']),
+            'phase' => $this->faker->randomElement(['design', 'permit', 'construction', 'complete']),
+            'zoning' => $this->faker->randomElement(['R-1', 'R-2', 'C-1', 'M-1', 'PUD']),
             'metadata' => [
                 'created_by_factory' => true,
                 'test_data' => true,

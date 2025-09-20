@@ -17,6 +17,8 @@ class Project extends Model
         'name',
         'description',
         'status',
+        'phase',
+        'zoning',
         'metadata',
     ];
 
